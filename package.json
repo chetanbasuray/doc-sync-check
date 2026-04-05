@@ -1,6 +1,6 @@
 {
   "name": "doc-sync-check",
-  "version": "1.0.0",
+  "version": "0.0.0",
   "description": "Documentation Drift Detector",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,7 +16,9 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/cli.js",
-    "test": "echo \"No test suite specified\"",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "lint": "eslint 'src/**/*.ts' 'tests/**/*.ts'",
+    "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build",
     "release": "standard-version",
     "prepare": "husky"
@@ -27,7 +29,7 @@
   },
   "keywords": [],
   "author": "Chetan Basuray",
-  "license": "ISC",
+  "license": "MIT",
   "type": "module",
   "bugs": {
     "url": "https://github.com/chetanbasuray/doc-sync-check/issues"
@@ -43,12 +45,24 @@
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
+    "@eslint/js": "^10.0.1",
     "@types/babel__traverse": "^7.28.0",
     "@types/fs-extra": "^11.0.4",
+    "@types/jest": "^30.0.0",
     "@types/node": "^25.5.2",
+    "conventional-changelog-conventionalcommits": "^9.3.1",
+    "eslint": "^10.2.0",
     "husky": "^9.1.7",
+    "jest": "^30.3.0",
+    "semantic-release": "^25.0.3",
     "standard-version": "^9.5.0",
+    "ts-jest": "^29.4.9",
     "ts-node": "^10.9.2",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.58.0"
+  },
+  "overrides": {
+    "picomatch": "^4.0.4",
+    "brace-expansion": "^5.0.5"
   }
 }

@@ -2,13 +2,8 @@
 import meow from 'meow';
 import { globby } from 'globby';
 import fs from 'fs-extra';
-import { parse } from '@babel/parser';
-import _traverse from '@babel/traverse';
 import { extractSignatures } from './extractor.js';
 import { checkDrift } from './validator.js';
-
-// Workaround for Babel traverse ESM export quirk
-const traverse = ((_traverse as any).default || _traverse) as typeof _traverse;
 
 const cli = meow(`
 	Usage
