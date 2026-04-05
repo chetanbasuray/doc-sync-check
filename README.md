@@ -1,19 +1,14 @@
-# Documentation Drift Detector
+# doc-sync-check
 
-A CLI tool to detect when documentation drifts from code changes using AST.
+A documentation drift detector. It uses AST parsing to verify that functions mentioned in your Markdown documentation have correct signatures that map up-to-date with your source code.
 
-## Getting Started
-
-Install the package:
+## Usage
 
 ```bash
-npm install -D documentation-drift-detector
+npx doc-sync-check <source-dir> --docs <docs-dir>
 ```
 
-Run the CLI:
-
+Example:
 ```bash
-npx documentation-drift-detector
+npx doc-sync-check src --docs docs
 ```
-
-> Next steps: Implement AST parsing for function declarations + Markdown lookup.
