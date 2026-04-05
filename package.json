@@ -27,7 +27,7 @@
   },
   "keywords": [],
   "author": "Chetan Basuray",
-  "license": "ISC",
+  "license": "MIT",
   "type": "module",
   "bugs": {
     "url": "https://github.com/chetanbasuray/doc-sync-check/issues"
