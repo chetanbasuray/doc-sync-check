@@ -1,6 +1,6 @@
 {
   "name": "doc-sync-check",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "Documentation Drift Detector",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
