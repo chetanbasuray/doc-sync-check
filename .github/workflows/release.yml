@@ -1,0 +1,39 @@
+name: Semantic Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    name: Publish to NPM
+    runs-on: ubuntu-latest
+    
+    # We shouldn't release if CI hasn't passed, though push triggers run in parallel so 
+    # github protects main anyway. But to be safe in a strict pipeline:
+    # needs: [ci] 
+    # (assuming ci and release are in the same workflow, but since they are separate,
+    # rely on branch protection rules, OR run CI verification beforehand)
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Force Build before Publish
+        run: npm run build
+
+      - name: Semantic Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npx semantic-release
