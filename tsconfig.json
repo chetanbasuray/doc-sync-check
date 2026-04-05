@@ -9,9 +9,11 @@
     "declaration": true,
     "skipLibCheck": true,
     "outDir": "./dist",
+    "rootDir": "./",
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
     "types": ["jest", "node"]
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["tests/fixtures/**/*"]
 }
