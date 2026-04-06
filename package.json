@@ -21,7 +21,8 @@
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build",
     "release": "standard-version",
-    "prepare": "husky"
+    "prepare": "husky",
+    "drift-check": "node dist/cli.js src"
   },
   "repository": {
     "type": "git",
