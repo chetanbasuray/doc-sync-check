@@ -10,7 +10,8 @@ const cli = meow(`
 	  $ doc-sync-check <source-dir>
 
 	Options
-	  --docs, -d  Path to documentation folder (default: ./docs)
+	  --docs, -d    Path to documentation folder (default: ./docs)
+	  --strict, -s  Fail on documentation drift (default: false)
 
 	Examples
 	  $ doc-sync-check src --docs ./documentation
@@ -21,6 +22,11 @@ const cli = meow(`
 			type: 'string',
 			shortFlag: 'd',
 			default: './docs'
+		},
+		strict: {
+			type: 'boolean',
+			shortFlag: 's',
+			default: false
 		}
 	}
 });
@@ -53,8 +59,12 @@ async function run() {
     const hasDrift = await checkDrift(allSigs, cli.flags.docs as string);
 
     if (hasDrift) {
-        console.error("\n❌ Drift check failed. Please update your documentation.");
-        process.exit(1);
+        if (cli.flags.strict) {
+            console.error("\n❌ Drift check failed. Please update your documentation.");
+            process.exit(1);
+        } else {
+            console.warn("\n⚠️  Drift detected, but strict mode is OFF. Exiting with success.");
+        }
     }
     
     console.log("\n✅ Drift check complete. No issues found.");

@@ -25,6 +25,7 @@ npx doc-sync-check <source-dir> --docs <docs-dir>
 ### Options
 - `<source-dir>`: The root directory containing your TypeScript files.
 - `--docs, -d`: The path to the folder containing your Markdown documentation files. Defaults to `./docs`.
+- `--strict, -s`: If set, the CLI will exit with code 1 if any documentation drift is detected. Defaults to `false`.
 
 ### Example
 ```bash
@@ -35,7 +36,7 @@ npx doc-sync-check src --docs docs
 
 1. **Extraction**: Parsers comb through your target TypeScript directory looking for exported functions.
 2. **Analysis**: The script breaks apart definitions into precise semantic substrings (e.g. tracking `userAuth(uuid: string, options?: any): boolean | void`).
-3. **Drift Detection**: Any Markdown file mentioning a detected function name by exact match must also include its corresponding up-to-date signature. If it doesn't, the CLI flags a drift warning and immediately fails the process (Exit Code 1).
+3. **Drift Detection**: Any Markdown file mentioning a detected function name by exact match must also include its corresponding up-to-date signature. If it doesn't, the CLI flags a drift warning. If the `--strict` flag is used, it also fails the process (Exit Code 1).
 
 ## 🤝 Contributing
 
