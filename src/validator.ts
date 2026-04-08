@@ -6,10 +6,10 @@ function normalizeSpace(str: string): string {
     return str.replace(/\s+/g, ' ').trim();
 }
 
-export async function checkDrift(signatures: FunctionSignature[], docsDir: string): Promise<boolean> {
-    const mdFiles = await globby(`${docsDir}/**/*.md`);
+export async function checkDrift(signatures: FunctionSignature[], docPatterns: string | string[]): Promise<boolean> {
+    const mdFiles = await globby(docPatterns);
     if (mdFiles.length === 0) {
-        console.warn(`No markdown files found in ${docsDir}`);
+        console.warn(`No markdown files found matching patterns: ${JSON.stringify(docPatterns)}`);
         return false;
     }
     

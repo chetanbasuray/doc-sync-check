@@ -32,7 +32,7 @@ describe('Validator', () => {
             '# Docs\n`testFunc(arg1: string): void`'
         );
 
-        const hasDrift = await checkDrift(sigs, tempDocsDir);
+        const hasDrift = await checkDrift(sigs, path.join(tempDocsDir, '**/*.md'));
         expect(hasDrift).toBe(false);
     });
 
@@ -51,7 +51,7 @@ describe('Validator', () => {
             '# Docs\n`testFunc(arg1: string): void`'
         );
 
-        const hasDrift = await checkDrift(sigs, tempDocsDir);
+        const hasDrift = await checkDrift(sigs, path.join(tempDocsDir, '**/*.md'));
         expect(hasDrift).toBe(true);
     });
 
@@ -70,7 +70,7 @@ describe('Validator', () => {
             '# Docs\nEmpty doc'
         );
 
-        const hasDrift = await checkDrift(sigs, tempDocsDir);
+        const hasDrift = await checkDrift(sigs, path.join(tempDocsDir, '**/*.md'));
         expect(hasDrift).toBe(false);
     });
 });
