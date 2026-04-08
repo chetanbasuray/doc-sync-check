@@ -26,11 +26,6 @@ const cli = meow(`
 			shortFlag: 'd',
 			default: './docs'
 		},
-		include: {
-			type: 'string',
-			shortFlag: 'i',
-			isMultiple: true
-		},
 		strict: {
 			type: 'boolean',
 			shortFlag: 's',
