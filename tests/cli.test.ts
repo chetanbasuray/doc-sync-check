@@ -52,4 +52,17 @@ describe('CLI Strict Mode', () => {
             expect(error.stderr.toString()).toContain('Drift check failed');
         }
     });
+    
+    it('should correctly use the --include flag with glob patterns', () => {
+        try {
+            // Using a specific pattern that matches our docs.md
+            const pattern = path.join(docsDir, '*.md');
+            execSync(`node --loader ts-node/esm ${cliPath} ${srcDir} --include "${pattern}" --strict`, { stdio: 'pipe' });
+            fail('CLI should have exited with non-zero code because drift is present in the included file');
+        } catch (error: any) {
+            expect(error.status).toBe(1);
+            expect(error.stdout.toString()).toContain('Checking against documentation matching: ["');
+            expect(error.stderr.toString()).toContain('Drift check failed');
+        }
+    });
 });
