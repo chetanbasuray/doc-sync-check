@@ -16,21 +16,62 @@ npm install -D doc-sync-check
 
 ## 🛠️ Usage
 
+### Drift check
+
 Run `doc-sync-check` by pointing it to your source code directory and specifying your documentation folder.
 
 ```bash
 npx doc-sync-check <source-dir> --docs <docs-dir>
 ```
 
-### Options
+#### Options
 - `<source-dir>`: The root directory containing your TypeScript files.
-- `--docs, -d`: The path to the folder containing your Markdown documentation files. Defaults to `./docs`.
-- `--strict, -s`: If set, the CLI will exit with code 1 if any documentation drift is detected. Defaults to `false`.
+- `--docs, -d`: Path to the folder containing your Markdown documentation files. Defaults to `./docs`.
+- `--include, -i`: One or more custom glob patterns for documentation files (overrides `--docs`).
+- `--strict, -s`: Exit with code `1` if any documentation drift is detected. Defaults to `false`.
 
-### Example
+#### Examples
 ```bash
 npx doc-sync-check src --docs docs
+npx doc-sync-check src --include "docs/**/*.md" "README.md" --strict
 ```
+
+---
+
+### Install Git pre-commit hook
+
+Automatically enforce drift checks before every commit by installing a Git pre-commit hook.
+
+```bash
+npx doc-sync-check install-hook
+```
+
+This writes `.git/hooks/pre-commit` with the following content:
+
+```sh
+#!/bin/sh
+npx doc-sync-check src --strict
+```
+
+The hook is made executable (`chmod +x`) and `.gitignore` is updated to exclude any backup files.
+
+#### Options
+- `--force, -f`: Overwrite an existing pre-commit hook without prompting. Defaults to `false`.
+
+#### Examples
+```bash
+# Install the hook (fails if one already exists)
+npx doc-sync-check install-hook
+
+# Overwrite an existing hook
+npx doc-sync-check install-hook --force
+```
+
+#### What it does
+1. Looks for `.git/` in the current working directory — exits with an error if not found.
+2. Creates `.git/hooks/` if it doesn't exist.
+3. Writes the pre-commit hook script and sets it executable.
+4. Appends a `.git/hooks/pre-commit.bak` entry to `.gitignore` (creates the file if absent, never duplicates the entry).
 
 ## 🧠 How it Works
 
