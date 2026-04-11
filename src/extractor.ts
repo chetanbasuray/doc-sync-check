@@ -1,13 +1,7 @@
 import { parse } from '@babel/parser';
-import * as babelTraverse from '@babel/traverse';
+import * as traverseModule from '@babel/traverse';
 import type { NodePath } from '@babel/traverse';
 import type { ExportNamedDeclaration, FunctionDeclaration, Node } from '@babel/types';
-
-// Normalize ESM/CJS interop while keeping typing for traverse
-const traverseCandidate = (babelTraverse as any).default?.default
-  ?? (babelTraverse as any).default
-  ?? (babelTraverse as any);
-const traverse = traverseCandidate as typeof babelTraverse.default;
 
 type NodeWithSpan = Node & { start: number | null; end: number | null };
 
@@ -25,6 +19,22 @@ export interface FunctionSignature {
 
 export function extractSignatures(code: string): FunctionSignature[] {
   const signatures: FunctionSignature[] = [];
+  type MaybeTraverse = { default?: unknown; traverse?: unknown };
+  const moduleCandidate = traverseModule as unknown as MaybeTraverse;
+  const candidates = [
+    moduleCandidate.default && (moduleCandidate.default as { default?: unknown }).default,
+    moduleCandidate.default,
+    moduleCandidate.traverse,
+    traverseModule as unknown,
+  ];
+  const traverse = candidates.find(
+    (candidate): candidate is typeof import('@babel/traverse').default => typeof candidate === 'function',
+  ) ?? null;
+
+  if (!traverse) {
+    console.error('Parsing error: traverse not available');
+    return signatures;
+  }
   
   try {
     const ast = parse(code, {
