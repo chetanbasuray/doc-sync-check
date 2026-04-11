@@ -1,9 +1,20 @@
 import { parse } from '@babel/parser';
 import * as babelTraverse from '@babel/traverse';
 import type { NodePath } from '@babel/traverse';
-import type { ExportNamedDeclaration } from '@babel/types';
+import type { ExportNamedDeclaration, FunctionDeclaration, Node } from '@babel/types';
 
-const traverse = ((babelTraverse as any).default?.default || (babelTraverse as any).default || babelTraverse) as any;
+// Normalize ESM/CJS interop while keeping typing for traverse
+const traverseCandidate = (babelTraverse as any).default?.default
+  ?? (babelTraverse as any).default
+  ?? (babelTraverse as any);
+const traverse = traverseCandidate as typeof babelTraverse.default;
+
+type NodeWithSpan = Node & { start: number | null; end: number | null };
+
+const sliceSpan = (node: NodeWithSpan, source: string): string => {
+  if (node.start == null || node.end == null) return '';
+  return source.slice(node.start, node.end);
+};
 
 export interface FunctionSignature {
   name: string;
@@ -22,19 +33,17 @@ export function extractSignatures(code: string): FunctionSignature[] {
     });
 
     traverse(ast, {
-      // TypeScript now knows this is a type-only reference
       ExportNamedDeclaration(path: NodePath<ExportNamedDeclaration>) {
         const { declaration } = path.node;
         
         if (declaration && declaration.type === 'FunctionDeclaration') {
-          const name = declaration.id?.name || 'anonymous';
+          const fnDecl = declaration as FunctionDeclaration;
+          const name = fnDecl.id?.name ?? 'anonymous';
           
-          const parameters = declaration.params.map((param: any) => {
-            return code.substring(param.start, param.end);
-          });
+          const parameters = fnDecl.params.map((param) => sliceSpan(param as NodeWithSpan, code));
 
-          const returnType = declaration.returnType
-            ? code.substring((declaration.returnType as any).start, (declaration.returnType as any).end)
+          const returnType = fnDecl.returnType
+            ? sliceSpan(fnDecl.returnType as unknown as NodeWithSpan, code)
             : '';
 
           const fullSignature = `${name}(${parameters.join(', ')})${returnType}`;
