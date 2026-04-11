@@ -1,6 +1,6 @@
 {
   "name": "doc-sync-check",
-  "version": "0.0.0",
+  "version": "1.1.0",
   "description": "Documentation Drift Detector",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,7 +21,8 @@
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build",
     "release": "standard-version",
-    "prepare": "husky"
+    "prepare": "husky",
+    "drift-check": "node dist/cli.js src"
   },
   "repository": {
     "type": "git",

@@ -2,6 +2,7 @@
 import meow from 'meow';
 import { globby } from 'globby';
 import fs from 'fs-extra';
+import path from 'path';
 import { extractSignatures } from './extractor.js';
 import { checkDrift } from './validator.js';
 
@@ -10,10 +11,13 @@ const cli = meow(`
 	  $ doc-sync-check <source-dir>
 
 	Options
-	  --docs, -d  Path to documentation folder (default: ./docs)
+	  --docs, -d     Path to documentation folder (default: ./docs)
+	  --include, -i  Custom glob patterns for documentation files
+	  --strict, -s   Fail on documentation drift (default: false)
 
 	Examples
 	  $ doc-sync-check src --docs ./documentation
+	  $ doc-sync-check src --include "docs/**/*.md" "README.md"
 `, {
 	importMeta: import.meta,
 	flags: {
@@ -21,6 +25,16 @@ const cli = meow(`
 			type: 'string',
 			shortFlag: 'd',
 			default: './docs'
+		},
+		include: {
+			type: 'string',
+			shortFlag: 'i',
+			isMultiple: true
+		},
+		strict: {
+			type: 'boolean',
+			shortFlag: 's',
+			default: false
 		}
 	}
 });
@@ -49,12 +63,21 @@ async function run() {
         }
     }
     
-    console.log(`\n📚 Checking against documentation in ${cli.flags.docs}...`);
-    const hasDrift = await checkDrift(allSigs, cli.flags.docs as string);
+    
+    const docPatterns = cli.flags.include && cli.flags.include.length > 0
+        ? cli.flags.include
+        : [path.join(cli.flags.docs as string, '**/*.md')];
+
+    console.log(`\n📚 Checking against documentation matching: ${JSON.stringify(docPatterns)}...`);
+    const hasDrift = await checkDrift(allSigs, docPatterns);
 
     if (hasDrift) {
-        console.error("\n❌ Drift check failed. Please update your documentation.");
-        process.exit(1);
+        if (cli.flags.strict) {
+            console.error("\n❌ Drift check failed. Please update your documentation.");
+            process.exit(1);
+        } else {
+            console.warn("\n⚠️  Drift detected, but strict mode is OFF. Exiting with success.");
+        }
     }
     
     console.log("\n✅ Drift check complete. No issues found.");
