@@ -28,7 +28,18 @@
     "type": "git",
     "url": "git+https://github.com/chetanbasuray/doc-sync-check.git"
   },
-  "keywords": [],
+  "keywords": [
+    "documentation",
+    "drift",
+    "sync",
+    "typescript",
+    "ast",
+    "cli",
+    "ci",
+    "markdown",
+    "jsdoc",
+    "tsdoc"
+  ],
   "author": "Chetan Basuray",
   "license": "MIT",
   "type": "module",
