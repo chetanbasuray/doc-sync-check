@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## 1.2.0 (2026-04-22)
+
+### Features
+
+- expand AST extraction to include exported interfaces, classes, class methods, and type aliases
+- support interface/class generics and class method overload declarations
+- parse abstract class methods and decorator metadata in extracted signatures
+
+### Bug Fixes
+
+- prevent private class methods from being surfaced in documentation drift checks
+- normalize multiline signatures to stable one-line comparison format
+
+### Documentation
+
+- refresh README usage and extraction details for the 1.2.0 symbol coverage
+
 ## 1.1.0 (2026-04-11)
 
 ### Features
