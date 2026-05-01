@@ -1,76 +1,69 @@
-import { checkDrift } from '../src/validator.js';
 import fs from 'fs-extra';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { checkDrift } from '../src/validator.js';
+import type { FunctionSignature } from '../src/extractor.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-describe('Validator', () => {
-    const tempDocsDir = path.join(__dirname, 'temp_docs');
+describe('Validator (1.3.0 scope)', () => {
+  const tempDocsDir = path.join(__dirname, 'temp_docs');
 
-    beforeEach(async () => {
-        await fs.ensureDir(tempDocsDir);
-    });
+  beforeEach(async () => {
+    await fs.ensureDir(tempDocsDir);
+  });
 
-    afterEach(async () => {
-        await fs.remove(tempDocsDir);
-    });
+  afterEach(async () => {
+    await fs.remove(tempDocsDir);
+  });
 
-    it('should return false when no drift is detected', async () => {
-        const sigs = [
-            {
-                name: 'testFunc',
-                parameters: ['arg1: string'],
-                returnType: ': void',
-                fullSignature: 'testFunc(arg1: string): void'
-            }
-        ];
+  it('returns no drift when all documented signatures are in sync', async () => {
+    const sigs: FunctionSignature[] = [
+      {
+        name: 'Auth.validate',
+        parameters: ['token: string'],
+        returnType: ': boolean',
+        fullSignature: 'Auth.validate(token: string): boolean',
+      },
+    ];
+    await fs.writeFile(path.join(tempDocsDir, 'docs.md'), '`Auth.validate(token: string): boolean`');
+    const result = await checkDrift(sigs, path.join(tempDocsDir, '**/*.md'));
+    expect(result.hasDrift).toBe(false);
+    expect(result.inSyncSymbols).toBe(1);
+    expect(result.coveragePercent).toBe(100);
+  });
 
-        await fs.writeFile(
-            path.join(tempDocsDir, 'docs.md'),
-            '# Docs\n`testFunc(arg1: string): void`'
-        );
+  it('flags drift when symbol is mentioned but signature changed', async () => {
+    const sigs: FunctionSignature[] = [
+      {
+        name: 'compute',
+        parameters: ['v: number'],
+        returnType: ': number',
+        fullSignature: 'compute(v: number): number',
+      },
+    ];
+    await fs.writeFile(path.join(tempDocsDir, 'docs.md'), '`compute(v: string): number`');
+    const result = await checkDrift(sigs, path.join(tempDocsDir, '**/*.md'));
+    expect(result.hasDrift).toBe(true);
+    expect(result.driftedSymbols).toBe(1);
+  });
 
-        const hasDrift = await checkDrift(sigs, path.join(tempDocsDir, '**/*.md'));
-        expect(hasDrift).toBe(false);
-    });
-
-    it('should return true when drift is detected', async () => {
-        const sigs = [
-            {
-                name: 'testFunc',
-                parameters: ['arg1: number'], // changed from string to number
-                returnType: ': void',
-                fullSignature: 'testFunc(arg1: number): void'
-            }
-        ];
-
-        await fs.writeFile(
-            path.join(tempDocsDir, 'docs.md'),
-            '# Docs\n`testFunc(arg1: string): void`'
-        );
-
-        const hasDrift = await checkDrift(sigs, path.join(tempDocsDir, '**/*.md'));
-        expect(hasDrift).toBe(true);
-    });
-
-    it('should return false for undocumented functions (not considered drift)', async () => {
-        const sigs = [
-            {
-                name: 'undocumentedFunc',
-                parameters: [],
-                returnType: ': void',
-                fullSignature: 'undocumentedFunc(): void'
-            }
-        ];
-
-        await fs.writeFile(
-            path.join(tempDocsDir, 'docs.md'),
-            '# Docs\nEmpty doc'
-        );
-
-        const hasDrift = await checkDrift(sigs, path.join(tempDocsDir, '**/*.md'));
-        expect(hasDrift).toBe(false);
-    });
+  it('flags unused documentation signature blocks', async () => {
+    const sigs: FunctionSignature[] = [
+      {
+        name: 'activeFn',
+        parameters: [],
+        returnType: ': void',
+        fullSignature: 'activeFn(): void',
+      },
+    ];
+    await fs.writeFile(
+      path.join(tempDocsDir, 'docs.md'),
+      '`activeFn(): void`\n\n`removedFn(x: string): boolean`',
+    );
+    const result = await checkDrift(sigs, path.join(tempDocsDir, '**/*.md'));
+    expect(result.hasDrift).toBe(true);
+    expect(result.unusedDocBlocks).toContain('removedFn(x: string): boolean');
+  });
 });

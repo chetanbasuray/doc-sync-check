@@ -1,71 +1,123 @@
-import { parse } from '@babel/parser';
-import * as traverseModule from '@babel/traverse';
-import type { NodePath } from '@babel/traverse';
-import type {
-  ClassBody,
-  ClassMethod,
-  ClassPrivateMethod,
-  Expression,
-  ExportDefaultDeclaration,
-  ExportNamedDeclaration,
-  FunctionDeclaration,
-  Identifier,
-  Node,
-  PrivateName,
-  TSDeclareMethod,
-  TSInterfaceBody,
-  TSInterfaceDeclaration,
-  TSMethodSignature,
-  TSPropertySignature,
-  TSTypeAliasDeclaration,
-} from '@babel/types';
+import { parseSync } from '@swc/core';
 
-type NodeWithSpan = Node & { start: number | null; end: number | null };
-type MaybeTraverse = { default?: unknown; traverse?: unknown };
+type Span = { start: number; end: number };
+type AstNode = { type?: string; span?: Span; [key: string]: unknown };
 
 const normalizeSpace = (value: string): string => value.replace(/\s+/g, ' ').trim();
 
-const sliceSpan = (node: NodeWithSpan, source: string): string => {
-  if (node.start == null || node.end == null) return '';
-  return normalizeSpace(source.slice(node.start, node.end));
+const sliceSpan = (span: Span | undefined, source: string): string => {
+  if (!span) return '';
+  const start = Math.max(0, span.start - 1);
+  const end = Math.max(start, span.end - 1);
+  return normalizeSpace(source.slice(start, end));
 };
 
-const keyName = (key: Identifier | PrivateName): string => {
-  if (key.type === 'Identifier') return key.name;
-  return key.id.name;
+const hasDeprecatedTag = (span: Span | undefined, source: string): boolean => {
+  if (!span) return false;
+  const start = Math.max(0, span.start - 600);
+  const end = Math.max(0, span.start - 1);
+  const leading = source.slice(start, end);
+  return /@deprecated/i.test(leading);
 };
 
-const typeParamsText = (node: { typeParameters?: Node | null }, source: string): string => {
-  if (!node.typeParameters) return '';
-  return sliceSpan(node.typeParameters as NodeWithSpan, source);
+const inferReturnType = (fn: AstNode | undefined): string => {
+  const body = (fn?.body as AstNode | undefined)?.stmts as AstNode[] | undefined;
+  if (!body || body.length === 0) return '';
+
+  const kinds = new Set<string>();
+  const addKindFromExpression = (node: AstNode | undefined): void => {
+    if (!node) return;
+    if (node.type === 'StringLiteral') kinds.add('string');
+    else if (node.type === 'NumericLiteral') kinds.add('number');
+    else if (node.type === 'BooleanLiteral') kinds.add('boolean');
+    else if (node.type === 'NullLiteral') kinds.add('null');
+    else if (node.type === 'ArrayExpression') kinds.add('unknown[]');
+    else if (node.type === 'ObjectExpression') kinds.add('Record<string, unknown>');
+    else kinds.add('unknown');
+  };
+  const visit = (node: AstNode | undefined): void => {
+    if (!node) return;
+    if (node.type === 'ReturnStatement') {
+      const arg = node.argument as AstNode | undefined;
+      if (!arg) {
+        kinds.add('void');
+        return;
+      }
+      if (arg.type === 'ConditionalExpression') {
+        addKindFromExpression(arg.consequent as AstNode | undefined);
+        addKindFromExpression(arg.alternate as AstNode | undefined);
+        return;
+      }
+      addKindFromExpression(arg);
+      return;
+    }
+    Object.values(node).forEach((value) => {
+      if (!value) return;
+      if (Array.isArray(value)) {
+        value.forEach((item) => {
+          if (item && typeof item === 'object') visit(item as AstNode);
+        });
+        return;
+      }
+      if (typeof value === 'object') visit(value as AstNode);
+    });
+  };
+
+  body.forEach((statement) => visit(statement));
+
+  if (kinds.size === 0) return '';
+  if (kinds.size === 1) return `: ${[...kinds][0]}`;
+  return `: ${[...kinds].sort().join(' | ')}`;
 };
 
-const typeAnnotationText = (
-  node: { typeAnnotation?: Node | null; returnType?: Node | null },
-  source: string,
-): string => {
-  if (node.typeAnnotation) return sliceSpan(node.typeAnnotation as NodeWithSpan, source);
-  if (node.returnType) return sliceSpan(node.returnType as NodeWithSpan, source);
-  return '';
+const getIdentifierName = (node: AstNode | undefined): string | null => {
+  if (!node) return null;
+  if (node.type === 'Identifier') return String(node.value);
+  if (node.type === 'PrivateName') {
+    const id = node.id as AstNode | undefined;
+    if (id?.type === 'Identifier') return String(id.value);
+  }
+  return null;
 };
 
-const decoratorsText = (node: { decorators?: Node[] | null }, source: string): string => {
-  if (!node.decorators || node.decorators.length === 0) return '';
-  const text = node.decorators.map((decorator) => sliceSpan(decorator as NodeWithSpan, source)).join(' ');
+const getParamText = (parameter: AstNode, source: string): string => {
+  const full = sliceSpan(parameter.span, source).replace(/,$/, '');
+  if (full) return full;
+
+  const pattern = (parameter.pat as AstNode | undefined) ?? parameter;
+  const fromIdentifier = (node: AstNode): string => {
+    const name = getIdentifierName(node) ?? sliceSpan(node.span, source);
+    const optional = node.optional ? '?' : '';
+    const typeAnnotation = sliceSpan((node.typeAnnotation as AstNode | undefined)?.span, source);
+    return normalizeSpace(`${name}${optional}${typeAnnotation}`);
+  };
+
+  if (pattern.type === 'Identifier') return fromIdentifier(pattern);
+  if (pattern.type === 'AssignmentPattern') {
+    const left = pattern.left as AstNode | undefined;
+    const right = pattern.right as AstNode | undefined;
+    return normalizeSpace(`${left ? fromIdentifier(left) : ''} = ${sliceSpan(right?.span, source)}`);
+  }
+  if (pattern.type === 'RestElement') {
+    const arg = pattern.argument as AstNode | undefined;
+    const argName = arg ? fromIdentifier(arg) : sliceSpan(pattern.span, source);
+    const typeAnnotation = sliceSpan((pattern.typeAnnotation as AstNode | undefined)?.span, source);
+    return normalizeSpace(`...${argName}${typeAnnotation}`);
+  }
+
+  return sliceSpan(parameter.span, source).replace(/,$/, '');
+};
+
+const decoratorsText = (node: AstNode, source: string): string => {
+  const decorators = node.decorators as AstNode[] | undefined;
+  if (!decorators || decorators.length === 0) return '';
+  const text = decorators.map((d) => sliceSpan(d.span, source)).filter(Boolean).join(' ');
   return text ? `${text} ` : '';
 };
 
-const methodParams = (params: Node[], source: string): string[] =>
-  params.map((param) => sliceSpan(param as NodeWithSpan, source));
-
-const hasIdentifierKey = (key: Expression | Identifier | PrivateName): key is Identifier =>
-  key.type === 'Identifier';
-
-const shouldSkipClassMember = (member: ClassMethod | TSDeclareMethod | ClassPrivateMethod): boolean => {
-  if (member.type === 'ClassPrivateMethod') return true;
-  if ('accessibility' in member && member.accessibility === 'private') return true;
-  return false;
-};
+const formatDeprecated = (deprecated: boolean, signature: string): string =>
+  deprecated ? `[deprecated] ${signature}` : signature;
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export interface FunctionSignature {
   name: string;
@@ -76,146 +128,225 @@ export interface FunctionSignature {
 
 export function extractSignatures(code: string): FunctionSignature[] {
   const signatures: FunctionSignature[] = [];
-  const moduleCandidate = traverseModule as unknown as MaybeTraverse;
-  const candidates = [
-    moduleCandidate.default && (moduleCandidate.default as { default?: unknown }).default,
-    moduleCandidate.default,
-    moduleCandidate.traverse,
-    traverseModule as unknown,
-  ];
-  const traverse = candidates.find(
-    (candidate): candidate is typeof import('@babel/traverse').default => typeof candidate === 'function',
-  ) ?? null;
+  let moduleAst: AstNode;
 
-  if (!traverse) {
-    console.error('Parsing error: traverse not available');
+  try {
+    moduleAst = parseSync(code, {
+      syntax: 'typescript',
+      decorators: true,
+      target: 'es2022',
+      comments: true,
+    }) as unknown as AstNode;
+  } catch (error) {
+    console.error('Parsing error:', error);
     return signatures;
   }
 
   const addSignature = (
     name: string,
-    parameters: string[],
-    returnType: string,
+    params: string[],
+    explicitReturn: string,
+    deprecated: boolean,
     prefix = '',
     annotations = '',
+    fallbackFn?: AstNode,
   ): void => {
-    const normalizedReturn = normalizeSpace(returnType);
-    const combined = `${annotations}${prefix}${name}(${parameters.join(', ')})${normalizedReturn}`;
+    const returnType = explicitReturn || inferReturnType(fallbackFn);
+    const combined = normalizeSpace(`${annotations}${prefix}${name}(${params.join(', ')})${returnType}`);
     signatures.push({
       name,
-      parameters,
-      returnType: normalizedReturn,
-      fullSignature: normalizeSpace(combined),
+      parameters: params,
+      returnType: normalizeSpace(returnType),
+      fullSignature: formatDeprecated(deprecated, combined),
     });
   };
 
-  const addInterfaceSignatures = (declaration: TSInterfaceDeclaration): void => {
-    const ifaceName = `${declaration.id.name}${typeParamsText(declaration, code)}`;
-    const body = declaration.body as TSInterfaceBody;
-    const props: string[] = [];
-
-    body.body.forEach((member) => {
-      if (member.type === 'TSPropertySignature') {
-        const property = member as TSPropertySignature;
-        if (!hasIdentifierKey(property.key)) return;
-        const optional = property.optional ? '?' : '';
-        const propertyType = typeAnnotationText(property as unknown as { typeAnnotation?: Node | null }, code);
-        props.push(`${property.key.name}${optional}${propertyType}`);
-      }
-
-      if (member.type === 'TSMethodSignature') {
-        const method = member as TSMethodSignature;
-        if (!hasIdentifierKey(method.key)) return;
-        const optional = method.optional ? '?' : '';
-        const params = methodParams(method.parameters as unknown as Node[], code);
-        const returnType = typeAnnotationText(method as unknown as { typeAnnotation?: Node | null }, code);
-        props.push(`${method.key.name}${optional}(${params.join(', ')})${returnType}`);
-      }
-    });
-
+  const addTypeAlias = (declaration: AstNode, prefix = ''): void => {
+    const id = declaration.id as AstNode | undefined;
+    const typeName = getIdentifierName(id) ?? 'anonymousType';
+    const typeParams = sliceSpan((declaration.typeParams as AstNode | undefined)?.span, code);
+    const rhs = sliceSpan((declaration.typeAnnotation as AstNode | undefined)?.span, code);
+    const deprecated = hasDeprecatedTag(declaration.span, code);
+    const signature = normalizeSpace(`type ${prefix}${typeName}${typeParams} = ${rhs}`);
     signatures.push({
-      name: declaration.id.name,
-      parameters: props,
+      name: `${prefix}${typeName}`,
+      parameters: [],
       returnType: '',
-      fullSignature: normalizeSpace(`interface ${ifaceName} { ${props.join('; ')} }`),
+      fullSignature: formatDeprecated(deprecated, signature),
     });
   };
 
-  const addClassSignatures = (className: string, body: ClassBody): void => {
-    body.body.forEach((member) => {
-      if (member.type !== 'ClassMethod' && member.type !== 'TSDeclareMethod') return;
-      if (shouldSkipClassMember(member)) return;
-      if (member.kind === 'constructor' || member.kind === 'get' || member.kind === 'set') return;
-      if (!hasIdentifierKey(member.key)) return;
-
-      const params = methodParams(member.params as Node[], code);
-      const returnType = typeAnnotationText(member as unknown as { returnType?: Node | null }, code);
-      const annotations = decoratorsText(member as unknown as { decorators?: Node[] | null }, code);
-      addSignature(`${className}.${keyName(member.key)}`, params, returnType, '', annotations);
+  const addEnum = (declaration: AstNode, prefix = ''): void => {
+    const id = declaration.id as AstNode | undefined;
+    const enumName = getIdentifierName(id) ?? 'AnonymousEnum';
+    const members = ((declaration.members as AstNode[] | undefined) ?? []).map((member) => {
+      const key = getIdentifierName(member.id as AstNode | undefined) ?? sliceSpan((member.id as AstNode | undefined)?.span, code);
+      const initNode = member.init as AstNode | undefined;
+      const value = sliceSpan(initNode?.span, code) || String((initNode as { raw?: string; value?: unknown } | undefined)?.raw ?? (initNode as { value?: unknown } | undefined)?.value ?? '');
+      return value ? `${key}=${value}` : key;
+    });
+    const deprecated = hasDeprecatedTag(declaration.span, code);
+    const signature = normalizeSpace(`enum ${prefix}${enumName} { ${members.join(', ')} }`);
+    signatures.push({
+      name: `${prefix}${enumName}`,
+      parameters: [],
+      returnType: '',
+      fullSignature: formatDeprecated(deprecated, signature),
     });
   };
 
-  const handleDeclaration = (declaration: Node | null | undefined): void => {
-    if (!declaration) return;
-
-    if (declaration.type === 'FunctionDeclaration') {
-      const fnDecl = declaration as FunctionDeclaration;
-      addSignature(
-        fnDecl.id?.name ?? 'anonymous',
-        methodParams(fnDecl.params as Node[], code),
-        typeAnnotationText(fnDecl as unknown as { returnType?: Node | null }, code),
+  const addVariable = (declaration: AstNode, prefix = ''): void => {
+    const kind = String(declaration.kind ?? 'const');
+    const declarations = (declaration.declarations as AstNode[] | undefined) ?? [];
+    declarations.forEach((item) => {
+      const id = item.id as AstNode | undefined;
+      if (id?.type !== 'Identifier') return;
+      const init = sliceSpan((item.init as AstNode | undefined)?.span, code);
+      const fallbackInit = String(
+        ((item.init as { raw?: string; value?: unknown } | undefined)?.raw ??
+          (item.init as { value?: unknown } | undefined)?.value ??
+          ''),
       );
-      return;
-    }
-
-    if (declaration.type === 'TSInterfaceDeclaration') {
-      addInterfaceSignatures(declaration as TSInterfaceDeclaration);
-      return;
-    }
-
-    if (declaration.type === 'ClassDeclaration' && declaration.id) {
-      const className = `${declaration.id.name}${typeParamsText(declaration, code)}`;
-      const annotations = decoratorsText(declaration as unknown as { decorators?: Node[] | null }, code);
+      const typeAnnotation = sliceSpan((id.typeAnnotation as AstNode | undefined)?.span, code);
+      const deprecated = hasDeprecatedTag(item.span ?? declaration.span, code);
+      const resolvedInit = init || fallbackInit;
+      const signature = normalizeSpace(`${kind} ${prefix}${String(id.value)}${typeAnnotation}${resolvedInit ? ` = ${resolvedInit}` : ''}`);
       signatures.push({
-        name: declaration.id.name,
+        name: `${prefix}${String(id.value)}`,
         parameters: [],
         returnType: '',
-        fullSignature: normalizeSpace(`${annotations}class ${className}`),
+        fullSignature: formatDeprecated(deprecated, signature),
       });
-      addClassSignatures(declaration.id.name, declaration.body);
+    });
+  };
+
+  const addInterface = (declaration: AstNode, prefix = ''): void => {
+    const id = declaration.id as AstNode | undefined;
+    const ifaceName = getIdentifierName(id) ?? 'AnonymousInterface';
+    const typeParams = sliceSpan((declaration.typeParams as AstNode | undefined)?.span, code);
+    const body = (declaration.body as AstNode | undefined)?.body as AstNode[] | undefined;
+    const members: string[] = [];
+
+    (body ?? []).forEach((member) => {
+      if (member.type === 'TsPropertySignature') {
+        members.push(sliceSpan(member.span, code));
+      } else if (member.type === 'TsMethodSignature') {
+        members.push(sliceSpan(member.span, code));
+      } else if (member.type === 'TsIndexSignature') {
+        members.push(sliceSpan(member.span, code));
+      }
+    });
+
+    const deprecated = hasDeprecatedTag(declaration.span, code);
+    const signature = normalizeSpace(`interface ${prefix}${ifaceName}${typeParams} { ${members.join('; ')} }`);
+    signatures.push({
+      name: `${prefix}${ifaceName}`,
+      parameters: members,
+      returnType: '',
+      fullSignature: formatDeprecated(deprecated, signature),
+    });
+  };
+
+  const addClass = (declaration: AstNode, prefix = ''): void => {
+    const id = declaration.identifier as AstNode | undefined;
+    const className = getIdentifierName(id) ?? 'AnonymousClass';
+    const typeParams = sliceSpan((declaration.typeParams as AstNode | undefined)?.span, code);
+    const annotations = decoratorsText(declaration, code);
+    const deprecated = hasDeprecatedTag(declaration.span, code);
+    const classSignature = normalizeSpace(`${annotations}class ${prefix}${className}${typeParams}`);
+    signatures.push({
+      name: `${prefix}${className}`,
+      parameters: [],
+      returnType: '',
+      fullSignature: formatDeprecated(deprecated, classSignature),
+    });
+
+    const members = (declaration.body as AstNode[] | undefined) ?? [];
+    members.forEach((member) => {
+      if (member.type !== 'ClassMethod') return;
+      const accessibility = member.accessibility as string | undefined;
+      if (accessibility === 'private') return;
+      const methodName = getIdentifierName(member.key as AstNode | undefined);
+      if (!methodName) return;
+      const params = ((member.function as AstNode | undefined)?.params as AstNode[] | undefined) ?? [];
+      const parameterTexts = params.map((param) => getParamText(param, code));
+      const explicitReturn = sliceSpan(((member.function as AstNode | undefined)?.returnType as AstNode | undefined)?.span, code);
+      const memberDeprecated = hasDeprecatedTag(member.span, code);
+      const memberAnnotations = decoratorsText(member, code);
+      addSignature(
+        `${prefix}${className}.${methodName}`,
+        parameterTexts,
+        explicitReturn,
+        memberDeprecated,
+        '',
+        memberAnnotations,
+        member.function as AstNode | undefined,
+      );
+    });
+  };
+
+  const addFunction = (declaration: AstNode, prefix = ''): void => {
+    const id = declaration.identifier as AstNode | undefined;
+    const fnName = getIdentifierName(id) ?? 'anonymous';
+    const params = (declaration.params as AstNode[] | undefined) ?? [];
+    const parameterTexts = params.map((param) => getParamText(param, code));
+    const explicitReturn = sliceSpan((declaration.returnType as AstNode | undefined)?.span, code);
+    const deprecated =
+      hasDeprecatedTag(declaration.span, code) ||
+      new RegExp(`/\\*\\*[\\s\\S]{0,500}@deprecated[\\s\\S]{0,500}\\*/\\s*export\\s+function\\s+${escapeRegExp(fnName)}\\b`, 'i').test(code);
+    addSignature(`${prefix}${fnName}`, parameterTexts, explicitReturn, deprecated, '', '', declaration);
+  };
+
+  const handleDeclaration = (declaration: AstNode | undefined, namespacePrefix = ''): void => {
+    if (!declaration) return;
+    if (declaration.type === 'FunctionDeclaration') {
+      addFunction(declaration, namespacePrefix);
       return;
     }
-
-    if (declaration.type === 'TSTypeAliasDeclaration') {
-      const typeDecl = declaration as TSTypeAliasDeclaration;
-      const typeName = `${typeDecl.id.name}${typeParamsText(typeDecl, code)}`;
-      const rhs = sliceSpan(typeDecl.typeAnnotation as NodeWithSpan, code);
-      signatures.push({
-        name: typeDecl.id.name,
-        parameters: [],
-        returnType: '',
-        fullSignature: normalizeSpace(`type ${typeName} = ${rhs}`),
-      });
+    if (declaration.type === 'ClassDeclaration') {
+      addClass(declaration, namespacePrefix);
+      return;
+    }
+    if (declaration.type === 'TsInterfaceDeclaration') {
+      addInterface(declaration, namespacePrefix);
+      return;
+    }
+    if (declaration.type === 'TsTypeAliasDeclaration') {
+      addTypeAlias(declaration, namespacePrefix);
+      return;
+    }
+    if (declaration.type === 'TsEnumDeclaration') {
+      addEnum(declaration, namespacePrefix);
+      return;
+    }
+    if (declaration.type === 'VariableDeclaration') {
+      addVariable(declaration, namespacePrefix);
+      return;
+    }
+    if (declaration.type === 'TsModuleDeclaration') {
+      const namespaceName = getIdentifierName(declaration.id as AstNode | undefined) ?? 'namespace';
+      const nextPrefix = `${namespacePrefix}${namespaceName}.`;
+      const body = declaration.body as AstNode | undefined;
+      if (!body) return;
+      if (body.type === 'TsModuleBlock') {
+        const items = (body.body as AstNode[] | undefined) ?? [];
+        items.forEach((item) => {
+          if (item.type === 'ExportDeclaration') {
+            handleDeclaration(item.declaration as AstNode | undefined, nextPrefix);
+          }
+        });
+      }
     }
   };
 
-  try {
-    const ast = parse(code, {
-      sourceType: 'module',
-      plugins: ['typescript', 'decorators-legacy'],
-    });
-
-    traverse(ast, {
-      ExportNamedDeclaration(path: NodePath<ExportNamedDeclaration>) {
-        handleDeclaration(path.node.declaration);
-      },
-      ExportDefaultDeclaration(path: NodePath<ExportDefaultDeclaration>) {
-        handleDeclaration(path.node.declaration as Node);
-      },
-    });
-  } catch (error) {
-    console.error('Parsing error:', error);
-  }
+  const body = (moduleAst.body as AstNode[] | undefined) ?? [];
+  body.forEach((item) => {
+    if (item.type === 'ExportDeclaration') {
+      handleDeclaration(item.declaration as AstNode | undefined);
+    } else if (item.type === 'ExportDefaultDeclaration') {
+      handleDeclaration(item.decl as AstNode | undefined);
+    }
+  });
 
   return signatures;
 }

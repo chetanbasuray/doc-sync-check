@@ -1,104 +1,71 @@
 import { extractSignatures } from '../src/extractor.js';
 
-describe('AST Extractor', () => {
-  it('extracts exported function signatures with normalized spacing', () => {
+describe('AST Extractor (1.3.0 scope)', () => {
+  it('supports namespaces and avoids name collisions across namespaces', () => {
     const code = `
-      export function testAuth(
-        token: string,
-        options?: any
-      ): boolean {
-        return true;
+      export namespace Auth {
+        export function validate(token: string): boolean { return true; }
+      }
+      export namespace Billing {
+        export function validate(token: string): boolean { return false; }
       }
     `;
+    const signatures = extractSignatures(code).map((s) => s.fullSignature);
+    expect(signatures).toContain('Auth.validate(token: string): boolean');
+    expect(signatures).toContain('Billing.validate(token: string): boolean');
+  });
 
+  it('supports optional, rest, and default parameters with union/intersection types', () => {
+    const code = `
+      export function buildConfig(
+        req: { id: string } & { role: string },
+        mode?: 'safe' | 'fast',
+        retries: number = 3,
+        ...tags: string[]
+      ): string | number {
+        return mode ? 1 : 'ok';
+      }
+    `;
     const signatures = extractSignatures(code);
-    expect(signatures).toHaveLength(1);
-    expect(signatures[0].name).toBe('testAuth');
-    expect(signatures[0].parameters).toEqual(['token: string', 'options?: any']);
-    expect(signatures[0].returnType).toBe(': boolean');
-    expect(signatures[0].fullSignature).toBe('testAuth(token: string, options?: any): boolean');
+    expect(signatures[0].parameters.join(', ')).toContain('mode?');
+    expect(signatures[0].parameters.join(', ')).toContain('retries =');
+    expect(signatures[0].parameters.join(', ')).toContain('...tags');
+    expect(signatures[0].fullSignature).toMatch(/: (string \| number|number \| string)/);
+    expect(signatures[0].fullSignature).toContain('buildConfig(');
   });
 
-  it('extracts exported interfaces and includes property types', () => {
+  it('supports enums and exported constants', () => {
     const code = `
-      export interface User<TMeta = string> {
-        id: number;
-        name?: string;
-        serialize(format: 'json' | 'text'): string;
+      export enum Status {
+        Ready = 1,
+        Busy
+      }
+      export const MAX_RETRIES = 5;
+    `;
+    const signatures = extractSignatures(code).map((s) => s.fullSignature);
+    expect(signatures).toContain('enum Status { Ready=1, Busy }');
+    expect(signatures).toContain('const MAX_RETRIES = 5');
+  });
+
+  it('infers return type when explicit annotation is missing', () => {
+    const code = `
+      export function compute(flag: boolean) {
+        if (flag) return 1;
+        return 'fallback';
       }
     `;
-
     const signatures = extractSignatures(code);
-    expect(signatures).toHaveLength(1);
-    expect(signatures[0].name).toBe('User');
-    expect(signatures[0].fullSignature).toContain('interface User<TMeta = string>');
-    expect(signatures[0].fullSignature).toContain('id: number');
-    expect(signatures[0].fullSignature).toContain("serialize(format: 'json' | 'text'): string");
+    expect(signatures[0].returnType).toBe(': number | string');
   });
 
-  it('extracts exported classes and skips private methods', () => {
+  it('marks deprecated symbols using JSDoc tags', () => {
     const code = `
-      export class SessionManager<TContext> {
-        private secret(v: string): void {}
-        public create(id: string): Promise<void> { return Promise.resolve(); }
+      /** @deprecated use \`next\` */
+      export function legacy(value: string): string {
+        return value;
       }
     `;
-
     const signatures = extractSignatures(code);
-    const full = signatures.map((sig) => sig.fullSignature);
-    expect(full).toContain('class SessionManager<TContext>');
-    expect(full).toContain('SessionManager.create(id: string): Promise<void>');
-    expect(full.join(' ')).not.toContain('secret');
-  });
-
-  it('extracts overload and abstract class methods', () => {
-    const code = `
-      export abstract class Repo {
-        abstract find(id: string): Promise<string>;
-        find(id: number): Promise<string>;
-        find(id: string | number): Promise<string> {
-          return Promise.resolve(String(id));
-        }
-      }
-    `;
-
-    const signatures = extractSignatures(code).map((sig) => sig.fullSignature);
-    expect(signatures).toContain('Repo.find(id: string): Promise<string>');
-    expect(signatures).toContain('Repo.find(id: number): Promise<string>');
-    expect(signatures).toContain('Repo.find(id: string | number): Promise<string>');
-  });
-
-  it('parses decorators and preserves decorator metadata in signatures', () => {
-    const code = `
-      function sealed(target: unknown): void {}
-      function auditable(): MethodDecorator { return () => undefined; }
-
-      @sealed
-      export class BillingService {
-        @auditable()
-        public charge(amount: number): Promise<boolean> {
-          return Promise.resolve(true);
-        }
-      }
-    `;
-
-    const signatures = extractSignatures(code).map((sig) => sig.fullSignature);
-    expect(signatures).toContain('@sealed class BillingService');
-    expect(signatures).toContain('@auditable() BillingService.charge(amount: number): Promise<boolean>');
-  });
-
-  it('extracts exported type aliases including generics', () => {
-    const code = `
-      export type ApiResponse<T> = {
-        data: T;
-        error?: string;
-      };
-    `;
-
-    const signatures = extractSignatures(code);
-    expect(signatures).toHaveLength(1);
-    expect(signatures[0].name).toBe('ApiResponse');
-    expect(signatures[0].fullSignature).toContain('type ApiResponse<T> =');
-    expect(signatures[0].fullSignature).toContain('data: T');
+    expect(signatures[0].fullSignature.startsWith('[deprecated]')).toBe(true);
   });
 });

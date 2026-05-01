@@ -28,7 +28,18 @@
     "type": "git",
     "url": "git+https://github.com/chetanbasuray/doc-sync-check.git"
   },
-  "keywords": [],
+  "keywords": [
+    "documentation",
+    "drift",
+    "sync",
+    "typescript",
+    "ast",
+    "cli",
+    "ci",
+    "markdown",
+    "jsdoc",
+    "tsdoc"
+  ],
   "author": "Chetan Basuray",
   "license": "MIT",
   "type": "module",
@@ -39,6 +50,7 @@
   "dependencies": {
     "@babel/parser": "^7.29.2",
     "@babel/traverse": "^7.29.0",
+    "@swc/core": "^1.15.32",
     "fs-extra": "^11.3.4",
     "globby": "^16.2.0",
     "meow": "^14.1.0"
