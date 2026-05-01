@@ -4,7 +4,7 @@ import { globby } from 'globby';
 import fs from 'fs-extra';
 import path from 'path';
 import { extractSignatures } from './extractor.js';
-import { checkDrift } from './validator.js';
+import { checkDrift, writeCoverageBadge } from './validator.js';
 
 const cli = meow(`
 	Usage
@@ -13,11 +13,13 @@ const cli = meow(`
 	Options
 	  --docs, -d     Path to documentation folder (default: ./docs)
 	  --include, -i  Custom glob patterns for documentation files
+	  --coverage-out Path for doc coverage report JSON
 	  --strict, -s   Fail on documentation drift (default: false)
 
 	Examples
 	  $ doc-sync-check src --docs ./documentation
 	  $ doc-sync-check src --include "docs/**/*.md" "README.md"
+	  $ doc-sync-check src --coverage-out ./coverage/doc-coverage.json --strict
 `, {
 	importMeta: import.meta,
 	flags: {
@@ -30,6 +32,10 @@ const cli = meow(`
 			type: 'string',
 			shortFlag: 'i',
 			isMultiple: true
+		},
+		coverageOut: {
+			type: 'string',
+			default: ''
 		},
 		strict: {
 			type: 'boolean',
@@ -69,9 +75,15 @@ async function run() {
         : [path.join(cli.flags.docs as string, '**/*.md')];
 
     console.log(`\n📚 Checking against documentation matching: ${JSON.stringify(docPatterns)}...`);
-    const hasDrift = await checkDrift(allSigs, docPatterns);
+    const result = await checkDrift(allSigs, docPatterns);
 
-    if (hasDrift) {
+    console.log(`\n📈 Coverage: ${result.coveragePercent}% documented (${result.documentedSymbols}/${allSigs.length})`);
+
+    if (cli.flags.coverageOut) {
+        await writeCoverageBadge(result, cli.flags.coverageOut);
+    }
+
+    if (result.hasDrift) {
         if (cli.flags.strict) {
             console.error("\n❌ Drift check failed. Please update your documentation.");
             process.exit(1);

@@ -50,6 +50,7 @@
   "dependencies": {
     "@babel/parser": "^7.29.2",
     "@babel/traverse": "^7.29.0",
+    "@swc/core": "^1.15.32",
     "fs-extra": "^11.3.4",
     "globby": "^16.2.0",
     "meow": "^14.1.0"
