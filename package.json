@@ -22,7 +22,11 @@
     "prepublishOnly": "npm run build",
     "release": "standard-version",
     "prepare": "husky",
-    "drift-check": "node dist/cli.js src"
+    "drift-check": "node dist/cli.js tests/fixtures/src --include tests/fixtures/docs/**/*.md",
+    "drift-check:strict": "node dist/cli.js tests/fixtures/src --include tests/fixtures/docs/**/*.md --strict --coverage-out coverage/doc-coverage.json --coverage-format json",
+    "drift-check:sonar": "node dist/cli.js tests/fixtures/src --include tests/fixtures/docs/**/*.md --coverage-out coverage/sonar-doc-coverage.json --coverage-format sonar",
+    "drift-check:cobertura": "node dist/cli.js tests/fixtures/src --include tests/fixtures/docs/**/*.md --coverage-out coverage/cobertura-doc-coverage.xml --coverage-format cobertura",
+    "docs:website": "node -e \"console.log('Serve ./website via GitHub Pages or any static host')\""
   },
   "repository": {
     "type": "git",

@@ -1,0 +1,14 @@
+{
+  "name": "doc-sync-check-vscode",
+  "displayName": "doc-sync-check",
+  "version": "0.0.1",
+  "publisher": "chetanbasuray",
+  "engines": { "vscode": "^1.90.0" },
+  "main": "./dist/extension.js",
+  "activationEvents": ["onLanguage:markdown"],
+  "contributes": {
+    "commands": [
+      { "command": "docSyncCheck.run", "title": "Doc Sync: Run Check" }
+    ]
+  }
+}

@@ -124,15 +124,34 @@ export interface FunctionSignature {
   parameters: string[];
   returnType: string;
   fullSignature: string;
+  jsDocDescription?: string;
 }
 
-export function extractSignatures(code: string): FunctionSignature[] {
+export interface ExtractOptions {
+  isJavaScript?: boolean;
+}
+
+const nearestJsDocDescription = (span: Span | undefined, source: string): string => {
+  if (!span) return '';
+  const windowStart = Math.max(0, span.start - 1200);
+  const leading = source.slice(windowStart, Math.max(0, span.start - 1));
+  const matches = [...leading.matchAll(/\/\*\*([\s\S]*?)\*\//g)];
+  if (matches.length === 0) return '';
+  const raw = matches[matches.length - 1]?.[1] ?? '';
+  const cleaned = raw
+    .split('\n')
+    .map((line) => line.replace(/^\s*\*\s?/, '').trim())
+    .filter((line) => line.length > 0 && !line.startsWith('@'));
+  return cleaned.join(' ').trim();
+};
+
+export function extractSignatures(code: string, options: ExtractOptions = {}): FunctionSignature[] {
   const signatures: FunctionSignature[] = [];
   let moduleAst: AstNode;
 
   try {
     moduleAst = parseSync(code, {
-      syntax: 'typescript',
+      syntax: options.isJavaScript ? 'ecmascript' : 'typescript',
       decorators: true,
       target: 'es2022',
       comments: true,
@@ -152,13 +171,15 @@ export function extractSignatures(code: string): FunctionSignature[] {
     fallbackFn?: AstNode,
   ): void => {
     const returnType = explicitReturn || inferReturnType(fallbackFn);
-    const combined = normalizeSpace(`${annotations}${prefix}${name}(${params.join(', ')})${returnType}`);
-    signatures.push({
-      name,
-      parameters: params,
-      returnType: normalizeSpace(returnType),
-      fullSignature: formatDeprecated(deprecated, combined),
-    });
+      const combined = normalizeSpace(`${annotations}${prefix}${name}(${params.join(', ')})${returnType}`);
+      const jsDocDescription = nearestJsDocDescription(fallbackFn?.span, code);
+      signatures.push({
+        name,
+        parameters: params,
+        returnType: normalizeSpace(returnType),
+        fullSignature: formatDeprecated(deprecated, combined),
+        jsDocDescription,
+      });
   };
 
   const addTypeAlias = (declaration: AstNode, prefix = ''): void => {
@@ -173,6 +194,7 @@ export function extractSignatures(code: string): FunctionSignature[] {
       parameters: [],
       returnType: '',
       fullSignature: formatDeprecated(deprecated, signature),
+      jsDocDescription: nearestJsDocDescription(declaration.span, code),
     });
   };
 
@@ -192,6 +214,7 @@ export function extractSignatures(code: string): FunctionSignature[] {
       parameters: [],
       returnType: '',
       fullSignature: formatDeprecated(deprecated, signature),
+      jsDocDescription: nearestJsDocDescription(declaration.span, code),
     });
   };
 
@@ -216,6 +239,7 @@ export function extractSignatures(code: string): FunctionSignature[] {
         parameters: [],
         returnType: '',
         fullSignature: formatDeprecated(deprecated, signature),
+        jsDocDescription: nearestJsDocDescription(item.span ?? declaration.span, code),
       });
     });
   };
@@ -244,6 +268,7 @@ export function extractSignatures(code: string): FunctionSignature[] {
       parameters: members,
       returnType: '',
       fullSignature: formatDeprecated(deprecated, signature),
+      jsDocDescription: nearestJsDocDescription(declaration.span, code),
     });
   };
 
@@ -259,6 +284,7 @@ export function extractSignatures(code: string): FunctionSignature[] {
       parameters: [],
       returnType: '',
       fullSignature: formatDeprecated(deprecated, classSignature),
+      jsDocDescription: nearestJsDocDescription(declaration.span, code),
     });
 
     const members = (declaration.body as AstNode[] | undefined) ?? [];

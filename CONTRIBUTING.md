@@ -27,12 +27,19 @@ This repository enforces **Conventional Commits**. When you make a commit locall
 
 1. Create a new branch matching your feature/bugfix (`feat/interface-parsing` or `fix/regex-bug`).
 2. Include fixtures in `tests/fixtures/src` and `tests/fixtures/docs` that properly evaluate the edge case of your changes.
-3. Test your changes manually (automated testing suite is coming soon):
+3. AST-specific logic should live under `src/ast/` exports or `src/extractor.ts` and stay decoupled from CLI side effects.
+4. Run checks before opening PR:
    ```bash
+   npm run lint
+   npm run typecheck
+   npm test
    npm run build
-   npx doc-sync-check tests/fixtures/src --docs tests/fixtures/docs
    ```
-4. Open a Pull Request referencing any related issues.
+5. Open a Pull Request referencing any related issues.
 
 ## Testing
-We are working on integrating a generic testing wrapper like Jest/Vitest soon. For now, rely on standard terminal verification over the fixtures directory.
+We use Jest with ESM + TypeScript support. You can still run fixture-based smoke checks:
+
+```bash
+npx doc-sync-check tests/fixtures/src --docs tests/fixtures/docs --strict
+```
