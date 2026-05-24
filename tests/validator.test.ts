@@ -66,4 +66,46 @@ describe('Validator (1.3.0 scope)', () => {
     expect(result.hasDrift).toBe(true);
     expect(result.unusedDocBlocks).toContain('removedFn(x: string): boolean');
   });
+
+  it('normalizes whitespace inside inline code signatures before comparing', async () => {
+    const sigs: FunctionSignature[] = [
+      {
+        name: 'formatName',
+        parameters: ['first: string', 'last: string'],
+        returnType: ': string',
+        fullSignature: 'formatName(first: string, last: string): string',
+      },
+    ];
+    await fs.writeFile(
+      path.join(tempDocsDir, 'docs.md'),
+      'Use `formatName(first: string,\n  last: string): string` for display labels.',
+    );
+
+    const result = await checkDrift(sigs, path.join(tempDocsDir, '**/*.md'));
+
+    expect(result.hasDrift).toBe(false);
+    expect(result.inSyncSymbols).toBe(1);
+    expect(result.unusedDocBlocks).toEqual([]);
+  });
+
+  it('normalizes source signatures when checking formatted markdown content', async () => {
+    const sigs: FunctionSignature[] = [
+      {
+        name: 'createUser',
+        parameters: ['input: CreateUserInput'],
+        returnType: ': Promise<User>',
+        fullSignature: 'createUser(\n  input: CreateUserInput\n): Promise<User>',
+      },
+    ];
+    await fs.writeFile(
+      path.join(tempDocsDir, 'docs.md'),
+      'Documented API: `createUser( input: CreateUserInput ): Promise<User>`.',
+    );
+
+    const result = await checkDrift(sigs, path.join(tempDocsDir, '**/*.md'));
+
+    expect(result.hasDrift).toBe(false);
+    expect(result.inSyncSymbols).toBe(1);
+    expect(result.unusedDocBlocks).toEqual([]);
+  });
 });
