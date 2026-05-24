@@ -40,4 +40,12 @@ jobs:
     - name: Run Doc Sync Check
       run: |
         npm run build
-        npm run drift-check
+        npm run drift-check:strict
+        npm run drift-check:sonar
+        npm run drift-check:cobertura
+
+    - name: Upload Doc Coverage Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: doc-coverage
+        path: coverage/

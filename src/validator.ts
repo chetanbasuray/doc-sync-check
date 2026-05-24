@@ -22,9 +22,18 @@ export interface DriftResult {
   undocumentedSymbols: number;
   unusedDocBlocks: string[];
   coveragePercent: number;
+  descriptionDriftSymbols: string[];
 }
 
-export async function checkDrift(signatures: FunctionSignature[], docPatterns: string | string[]): Promise<DriftResult> {
+export interface CheckDriftOptions {
+  checkDescriptions?: boolean;
+}
+
+export async function checkDrift(
+  signatures: FunctionSignature[],
+  docPatterns: string | string[],
+  options: CheckDriftOptions = {},
+): Promise<DriftResult> {
   const mdFiles = await globby(docPatterns);
   if (mdFiles.length === 0) {
     console.warn(`No markdown files found matching patterns: ${JSON.stringify(docPatterns)}`);
@@ -36,6 +45,7 @@ export async function checkDrift(signatures: FunctionSignature[], docPatterns: s
       undocumentedSymbols: signatures.length,
       unusedDocBlocks: [],
       coveragePercent: signatures.length === 0 ? 100 : 0,
+      descriptionDriftSymbols: [],
     };
   }
 
@@ -56,6 +66,7 @@ export async function checkDrift(signatures: FunctionSignature[], docPatterns: s
   let inSyncSymbols = 0;
   let driftedSymbols = 0;
   let undocumentedSymbols = 0;
+  const descriptionDriftSymbols: string[] = [];
   const allDocSignatureBlocks = new Set<string>();
 
   docs.forEach((doc) => {
@@ -90,6 +101,16 @@ export async function checkDrift(signatures: FunctionSignature[], docPatterns: s
     } else if (nameFound && signatureFound) {
       console.log(`✅ IN SYNC: '${sig.name}' is correctly documented.`);
       inSyncSymbols += 1;
+      if (options.checkDescriptions && sig.jsDocDescription) {
+        const descriptionFound = docs.some((doc) =>
+          doc.normalizedContent.toLowerCase().includes(normalizeSpace(sig.jsDocDescription ?? '').toLowerCase()),
+        );
+        if (!descriptionFound) {
+          hasDrift = true;
+          descriptionDriftSymbols.push(sig.name);
+          console.error(`❌ DESCRIPTION DRIFT: '${sig.name}' JSDoc description not found in docs.`);
+        }
+      }
     } else {
       console.log(`⚠️  UNDOCUMENTED: '${sig.name}' was not found in any documentation.`);
       undocumentedSymbols += 1;
@@ -118,6 +139,7 @@ export async function checkDrift(signatures: FunctionSignature[], docPatterns: s
     undocumentedSymbols,
     unusedDocBlocks,
     coveragePercent,
+    descriptionDriftSymbols,
   };
 }
 
@@ -133,4 +155,41 @@ export async function writeCoverageBadge(result: DriftResult, outputPath: string
   await fs.writeFile(outputPath, JSON.stringify(payload, null, 2), 'utf-8');
   console.log(`📊 Doc coverage report written: ${outputPath}`);
   console.log(`🏷️  Suggested badge: ${badgeUrl}`);
+}
+
+export async function writeSonarReport(result: DriftResult, outputPath: string): Promise<void> {
+  const payload = {
+    project: 'doc-sync-check',
+    metrics: {
+      documentedSymbols: result.documentedSymbols,
+      inSyncSymbols: result.inSyncSymbols,
+      driftedSymbols: result.driftedSymbols,
+      undocumentedSymbols: result.undocumentedSymbols,
+      coveragePercent: result.coveragePercent,
+      unusedDocBlocks: result.unusedDocBlocks.length,
+      descriptionDriftSymbols: result.descriptionDriftSymbols.length,
+    },
+    generatedAt: new Date().toISOString(),
+  };
+  await fs.ensureDir(path.dirname(outputPath));
+  await fs.writeFile(outputPath, JSON.stringify(payload, null, 2), 'utf-8');
+}
+
+export async function writeCoberturaReport(result: DriftResult, outputPath: string): Promise<void> {
+  const lineRate = Math.max(0, Math.min(1, result.coveragePercent / 100));
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<coverage line-rate="${lineRate.toFixed(2)}" branch-rate="0" version="1.0" timestamp="${Date.now()}">
+  <packages>
+    <package name="doc-sync-check" line-rate="${lineRate.toFixed(2)}" branch-rate="0">
+      <classes>
+        <class name="documentation" filename="docs" line-rate="${lineRate.toFixed(2)}" branch-rate="0">
+          <methods/>
+          <lines/>
+        </class>
+      </classes>
+    </package>
+  </packages>
+</coverage>`;
+  await fs.ensureDir(path.dirname(outputPath));
+  await fs.writeFile(outputPath, xml, 'utf-8');
 }
