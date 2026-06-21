@@ -33,16 +33,24 @@
     "url": "git+https://github.com/chetanbasuray/doc-sync-check.git"
   },
   "keywords": [
+    "doc",
+    "docs",
     "documentation",
     "drift",
     "sync",
+    "doc-sync",
+    "documentation-drift",
     "typescript",
+    "javascript",
     "ast",
     "cli",
     "ci",
+    "lint",
+    "quality",
     "markdown",
     "jsdoc",
-    "tsdoc"
+    "tsdoc",
+    "jest"
   ],
   "author": "Chetan Basuray",
   "license": "MIT",
