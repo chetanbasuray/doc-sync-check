@@ -28,7 +28,7 @@ describe('AST Extractor (1.3.0 scope)', () => {
     `;
     const signatures = extractSignatures(code);
     expect(signatures[0].parameters.join(', ')).toContain('mode?');
-    expect(signatures[0].parameters.join(', ')).toContain('retries =');
+    expect(signatures[0].parameters.join(', ')).toContain('retries: number = 3');
     expect(signatures[0].parameters.join(', ')).toContain('...tags');
     expect(signatures[0].fullSignature).toMatch(/: (string \| number|number \| string)/);
     expect(signatures[0].fullSignature).toContain('buildConfig(');
