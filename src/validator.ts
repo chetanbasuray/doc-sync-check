@@ -2,12 +2,7 @@ import { globby } from 'globby';
 import fs from 'fs-extra';
 import path from 'path';
 import type { FunctionSignature } from './extractor.js';
-
-function normalizeSpace(str: string): string {
-  return str.replace(/\s+/g, ' ').trim();
-}
-
-const escapeLiteral = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+import { escapeRegExp, normalizeSpace, stripDeprecatedMarker } from './utils.js';
 
 const signatureLiterals = (content: string): string[] => {
   const matches = content.match(/`([^`]+)`/g) ?? [];
@@ -73,11 +68,15 @@ export async function checkDrift(
     doc.signatureBlocks.forEach((block) => allDocSignatureBlocks.add(block));
   });
 
-  const knownSignatureBlocks = new Set<string>(signatures.map((sig) => normalizeSpace(sig.fullSignature)));
+  // Docs are not expected to carry the extractor's [deprecated] marker, so we
+  // compare against the marker-free form on both sides.
+  const knownSignatureBlocks = new Set<string>(
+    signatures.map((sig) => stripDeprecatedMarker(normalizeSpace(sig.fullSignature))),
+  );
 
   for (const sig of signatures) {
-    const normalizedSig = normalizeSpace(sig.fullSignature);
-    const nameRegex = new RegExp(`\\b${escapeLiteral(sig.name)}\\b`);
+    const normalizedSig = stripDeprecatedMarker(normalizeSpace(sig.fullSignature));
+    const nameRegex = new RegExp(`\\b${escapeRegExp(sig.name)}\\b`);
     let nameFound = false;
     let signatureFound = false;
 
@@ -95,7 +94,7 @@ export async function checkDrift(
 
     if (nameFound && !signatureFound) {
       console.error(`❌ DRIFT DETECTED: Symbol '${sig.name}' is mentioned in documentation, but the updated signature was not found.`);
-      console.error(`   Expected to find: ${sig.fullSignature}`);
+      console.error(`   Expected to find: ${normalizedSig}`);
       hasDrift = true;
       driftedSymbols += 1;
     } else if (nameFound && signatureFound) {

@@ -67,6 +67,24 @@ describe('Validator (1.3.0 scope)', () => {
     expect(result.unusedDocBlocks).toContain('removedFn(x: string): boolean');
   });
 
+  it('treats a deprecated symbol as in sync when docs omit the [deprecated] marker', async () => {
+    const sigs: FunctionSignature[] = [
+      {
+        name: 'legacy',
+        parameters: ['value: string'],
+        returnType: ': string',
+        fullSignature: '[deprecated] legacy(value: string): string',
+      },
+    ];
+    await fs.writeFile(path.join(tempDocsDir, 'docs.md'), 'Use `legacy(value: string): string` for now.');
+
+    const result = await checkDrift(sigs, path.join(tempDocsDir, '**/*.md'));
+
+    expect(result.hasDrift).toBe(false);
+    expect(result.inSyncSymbols).toBe(1);
+    expect(result.unusedDocBlocks).toEqual([]);
+  });
+
   it('normalizes whitespace inside inline code signatures before comparing', async () => {
     const sigs: FunctionSignature[] = [
       {
