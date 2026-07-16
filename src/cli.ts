@@ -13,6 +13,7 @@ import {
 import { contentHash, DEFAULT_CACHE_PATH, loadCache, saveCache } from './cache.js';
 import { notifyDriftFailure } from './integrations.js';
 import { updateReadmeFunctions } from './readme.js';
+import { DEFAULT_CONFIG_PATH, loadFileConfig, type FileConfig } from './config.js';
 
 const cli = meow(
   `
@@ -33,7 +34,8 @@ const cli = meow(
 	  --check-descriptions  Validate JSDoc descriptions appear in docs
 	  --update-readme       Auto-write exported signatures to README markers
 	  --readme-path         README path for --update-readme (default: ./README.md)
-	  --init                Interactive setup wizard
+	  --config              Config file path (default: .doc-sync-checkrc.json)
+	  --init                Write a starter .doc-sync-checkrc.json
 
 	Examples
 	  $ doc-sync-check src --docs ./documentation --strict
@@ -55,13 +57,27 @@ const cli = meow(
       checkDescriptions: { type: 'boolean', default: false },
       updateReadme: { type: 'boolean', default: false },
       readmePath: { type: 'string', default: './README.md' },
+      config: { type: 'string', default: DEFAULT_CONFIG_PATH },
       init: { type: 'boolean', default: false },
     },
   },
 );
 
-async function runInitWizard(): Promise<void> {
-  const configPath = '.doc-sync-checkrc.json';
+// meow always supplies defaults, so we inspect argv to tell an explicitly
+// passed flag from a default. Explicit flags win over the config file.
+const flagWasProvided = (name: string, shortFlag?: string): boolean => {
+  const kebab = name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+  return process.argv.slice(2).some((token) =>
+    token === `--${kebab}` ||
+    token.startsWith(`--${kebab}=`) ||
+    token === `--no-${kebab}` ||
+    token === `--${name}` ||
+    token.startsWith(`--${name}=`) ||
+    (!!shortFlag && (token === `-${shortFlag}` || token.startsWith(`-${shortFlag}=`))),
+  );
+};
+
+async function runInitWizard(configPath: string): Promise<void> {
   const template = {
     docs: './docs',
     include: ['docs/**/*.md', 'README.md', 'website/docs/**/*.md'],
@@ -96,7 +112,7 @@ const normalizeDocBlocks = async (docPatterns: string[]): Promise<void> => {
 
 async function run() {
   if (cli.flags.init) {
-    await runInitWizard();
+    await runInitWizard(cli.flags.config);
     return;
   }
 
@@ -106,23 +122,48 @@ async function run() {
     process.exit(1);
   }
 
+  const fileConfig = await loadFileConfig(cli.flags.config);
+  const resolve = <K extends keyof typeof cli.flags & keyof FileConfig>(
+    key: K,
+    shortFlag?: string,
+  ): NonNullable<FileConfig[K]> => {
+    if (flagWasProvided(key, shortFlag) || fileConfig[key] === undefined) {
+      return cli.flags[key] as NonNullable<FileConfig[K]>;
+    }
+    return fileConfig[key] as NonNullable<FileConfig[K]>;
+  };
+
+  const docs = resolve('docs', 'd');
+  const include = resolve('include', 'i');
+  const strict = resolve('strict', 's');
+  const useCache = resolve('cache');
+  const cacheFile = resolve('cacheFile');
+  const coverageOut = resolve('coverageOut');
+  const coverageFormat = resolve('coverageFormat');
+  const slackWebhook = resolve('slackWebhook');
+  const discordWebhook = resolve('discordWebhook');
+  const fixDocs = resolve('fixDocs');
+  const checkDescriptions = resolve('checkDescriptions');
+  const updateReadme = resolve('updateReadme');
+  const readmePath = resolve('readmePath');
+
   const docPatterns =
-    cli.flags.include && cli.flags.include.length > 0
-      ? cli.flags.include
+    include && include.length > 0
+      ? include
       : [
-          path.join(cli.flags.docs as string, '**/*.md'),
+          path.join(docs, '**/*.md'),
           'README.md',
           'website/docs/**/*.md',
           'docs/**/*.md',
           '.vuepress/**/*.md',
         ];
 
-  if (cli.flags.fixDocs) {
+  if (fixDocs) {
     await normalizeDocBlocks(docPatterns);
   }
 
   const files = await parseSourceFiles(sourceDir);
-  const cache = cli.flags.cache ? await loadCache(cli.flags.cacheFile) : { version: 1 as const, files: {} };
+  const cache = useCache ? await loadCache(cacheFile) : { version: 1 as const, files: {} };
   const nextCache = { version: 1 as const, files: { ...cache.files } };
   const allSigs = [];
 
@@ -132,7 +173,7 @@ async function run() {
     const hash = contentHash(code);
     const cached = cache.files[file];
 
-    if (cli.flags.cache && cached && cached.mtimeMs === stat.mtimeMs && cached.hash === hash) {
+    if (useCache && cached && cached.mtimeMs === stat.mtimeMs && cached.hash === hash) {
       allSigs.push(...cached.signatures);
       continue;
     }
@@ -143,31 +184,28 @@ async function run() {
     nextCache.files[file] = { mtimeMs: stat.mtimeMs, hash, signatures: sigs };
   }
 
-  if (cli.flags.cache) {
-    await saveCache(cli.flags.cacheFile, nextCache);
+  if (useCache) {
+    await saveCache(cacheFile, nextCache);
   }
 
-  if (cli.flags.updateReadme) {
-    await updateReadmeFunctions(cli.flags.readmePath, allSigs);
+  if (updateReadme) {
+    await updateReadmeFunctions(readmePath, allSigs);
   }
 
-  const result = await checkDrift(allSigs, docPatterns, {
-    checkDescriptions: cli.flags.checkDescriptions,
-  });
+  const result = await checkDrift(allSigs, docPatterns, { checkDescriptions });
 
   console.log(`\n📈 Coverage: ${result.coveragePercent}% documented (${result.documentedSymbols}/${allSigs.length})`);
 
-  if (cli.flags.coverageOut) {
-    const format = String(cli.flags.coverageFormat);
-    if (format === 'sonar') await writeSonarReport(result, cli.flags.coverageOut);
-    else if (format === 'cobertura') await writeCoberturaReport(result, cli.flags.coverageOut);
-    else await writeCoverageBadge(result, cli.flags.coverageOut);
+  if (coverageOut) {
+    if (coverageFormat === 'sonar') await writeSonarReport(result, coverageOut);
+    else if (coverageFormat === 'cobertura') await writeCoberturaReport(result, coverageOut);
+    else await writeCoverageBadge(result, coverageOut);
   }
 
   if (result.hasDrift) {
     await notifyDriftFailure({
-      slackWebhook: cli.flags.slackWebhook,
-      discordWebhook: cli.flags.discordWebhook,
+      slackWebhook,
+      discordWebhook,
       project: path.basename(process.cwd()),
       driftedSymbols: result.driftedSymbols,
       undocumentedSymbols: result.undocumentedSymbols,
@@ -175,7 +213,7 @@ async function run() {
       coveragePercent: result.coveragePercent,
     });
 
-    if (cli.flags.strict) {
+    if (strict) {
       console.error('\n❌ Drift check failed. Please update your documentation.');
       process.exit(1);
     }
@@ -186,4 +224,7 @@ async function run() {
   }
 }
 
-run();
+run().catch((error) => {
+  console.error('doc-sync-check failed:', error instanceof Error ? error.message : error);
+  process.exit(1);
+});

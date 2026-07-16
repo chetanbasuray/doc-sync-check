@@ -1,9 +1,8 @@
 import { parseSync } from '@swc/core';
+import { escapeRegExp, normalizeSpace } from './utils.js';
 
 type Span = { start: number; end: number };
 type AstNode = { type?: string; span?: Span; [key: string]: unknown };
-
-const normalizeSpace = (value: string): string => value.replace(/\s+/g, ' ').trim();
 
 const sliceSpan = (span: Span | undefined, source: string): string => {
   if (!span) return '';
@@ -35,8 +34,21 @@ const inferReturnType = (fn: AstNode | undefined): string => {
     else if (node.type === 'ObjectExpression') kinds.add('Record<string, unknown>');
     else kinds.add('unknown');
   };
+  // Returns inside nested functions belong to those scopes, not the one we
+  // are inferring, so we stop descending when we enter a new function scope.
+  const nestedScopes = new Set([
+    'FunctionDeclaration',
+    'FunctionExpression',
+    'ArrowFunctionExpression',
+    'ClassMethod',
+    'PrivateMethod',
+    'MethodProperty',
+    'GetterProperty',
+    'SetterProperty',
+  ]);
   const visit = (node: AstNode | undefined): void => {
     if (!node) return;
+    if (node.type && nestedScopes.has(node.type)) return;
     if (node.type === 'ReturnStatement') {
       const arg = node.argument as AstNode | undefined;
       if (!arg) {
@@ -117,7 +129,6 @@ const decoratorsText = (node: AstNode, source: string): string => {
 
 const formatDeprecated = (deprecated: boolean, signature: string): string =>
   deprecated ? `[deprecated] ${signature}` : signature;
-const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export interface FunctionSignature {
   name: string;

@@ -33,8 +33,25 @@ npx doc-sync-check <source-dir> --docs <docs-dir>
 - `--fix-docs`: Auto-trims inline markdown signature blocks.
 - `--check-descriptions`: Compares JSDoc descriptions against markdown text.
 - `--update-readme`: Updates function list between README markers.
-- `--init`: Creates a starter `.doc-sync-checkrc.json`.
+- `--config`: Path to the config file (default: `.doc-sync-checkrc.json`).
+- `--init`: Writes a starter `.doc-sync-checkrc.json`.
 - `--slack-webhook` and `--discord-webhook`: Sends drift failure notifications.
+
+### Configuration file
+
+If a `.doc-sync-checkrc.json` file is present (or one is passed via `--config`), its
+values are loaded automatically. Explicit command-line flags always take precedence
+over the config file, which in turn takes precedence over the built-in defaults.
+
+```json
+{
+  "include": ["docs/**/*.md", "README.md"],
+  "strict": true,
+  "cache": true,
+  "coverageOut": "./coverage/doc-coverage.json",
+  "coverageFormat": "json"
+}
+```
 
 ### Example
 ```bash

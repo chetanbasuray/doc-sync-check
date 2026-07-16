@@ -58,6 +58,18 @@ describe('AST Extractor (1.3.0 scope)', () => {
     expect(signatures[0].returnType).toBe(': number | string');
   });
 
+  it('ignores returns from nested function scopes when inferring return type', () => {
+    const code = `
+      export function outer(flag: boolean) {
+        const cb = () => { return 'nested'; };
+        function helper() { return false; }
+        return 1;
+      }
+    `;
+    const signatures = extractSignatures(code);
+    expect(signatures[0].returnType).toBe(': number');
+  });
+
   it('marks deprecated symbols using JSDoc tags', () => {
     const code = `
       /** @deprecated use \`next\` */
