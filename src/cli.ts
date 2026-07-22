@@ -44,37 +44,62 @@ const cli = meow(
   {
     importMeta: import.meta,
     flags: {
-      docs: { type: 'string', shortFlag: 'd', default: './docs' },
+      // No defaults here: an unset flag stays undefined so config-file values
+      // can fill in, while an explicit flag (including --no-*) still wins.
+      docs: { type: 'string', shortFlag: 'd' },
       include: { type: 'string', shortFlag: 'i', isMultiple: true },
-      coverageOut: { type: 'string', default: '' },
-      coverageFormat: { type: 'string', default: 'json' },
-      strict: { type: 'boolean', shortFlag: 's', default: false },
-      cache: { type: 'boolean', default: true },
-      cacheFile: { type: 'string', default: DEFAULT_CACHE_PATH },
-      slackWebhook: { type: 'string', default: '' },
-      discordWebhook: { type: 'string', default: '' },
-      fixDocs: { type: 'boolean', default: false },
-      checkDescriptions: { type: 'boolean', default: false },
-      updateReadme: { type: 'boolean', default: false },
-      readmePath: { type: 'string', default: './README.md' },
+      coverageOut: { type: 'string' },
+      coverageFormat: { type: 'string' },
+      strict: { type: 'boolean', shortFlag: 's' },
+      cache: { type: 'boolean' },
+      cacheFile: { type: 'string' },
+      slackWebhook: { type: 'string' },
+      discordWebhook: { type: 'string' },
+      fixDocs: { type: 'boolean' },
+      checkDescriptions: { type: 'boolean' },
+      updateReadme: { type: 'boolean' },
+      readmePath: { type: 'string' },
       config: { type: 'string', default: DEFAULT_CONFIG_PATH },
       init: { type: 'boolean', default: false },
     },
   },
 );
 
-// meow always supplies defaults, so we inspect argv to tell an explicitly
-// passed flag from a default. Explicit flags win over the config file.
+const DEFAULTS = {
+  docs: './docs',
+  coverageOut: '',
+  coverageFormat: 'json',
+  strict: false,
+  cache: true,
+  cacheFile: DEFAULT_CACHE_PATH,
+  slackWebhook: '',
+  discordWebhook: '',
+  fixDocs: false,
+  checkDescriptions: false,
+  updateReadme: false,
+  readmePath: './README.md',
+};
+
+// meow coerces an unset boolean flag to false, so it cannot tell "unset" from
+// an explicit --no-flag. We scan argv (up to the `--` separator) to know which
+// flags the user actually passed, so those override the config file.
+const passedArgs = (() => {
+  const argv = process.argv.slice(2);
+  const separator = argv.indexOf('--');
+  return separator === -1 ? argv : argv.slice(0, separator);
+})();
+
 const flagWasProvided = (name: string, shortFlag?: string): boolean => {
   const kebab = name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
-  return process.argv.slice(2).some((token) =>
-    token === `--${kebab}` ||
-    token.startsWith(`--${kebab}=`) ||
-    token === `--no-${kebab}` ||
-    token === `--${name}` ||
-    token.startsWith(`--${name}=`) ||
-    (!!shortFlag && (token === `-${shortFlag}` || token.startsWith(`-${shortFlag}=`))),
-  );
+  return passedArgs.some((token) => {
+    if (token === `--${kebab}` || token.startsWith(`--${kebab}=`)) return true;
+    if (token === `--no-${kebab}` || token === `--no-${name}`) return true;
+    if (token === `--${name}` || token.startsWith(`--${name}=`)) return true;
+    if (shortFlag && token.startsWith('-') && !token.startsWith('--')) {
+      return token.slice(1).split('=')[0].includes(shortFlag);
+    }
+    return false;
+  });
 };
 
 async function runInitWizard(configPath: string): Promise<void> {
@@ -123,29 +148,31 @@ async function run() {
   }
 
   const fileConfig = await loadFileConfig(cli.flags.config);
-  const resolve = <K extends keyof typeof cli.flags & keyof FileConfig>(
+  // Precedence: an explicitly passed flag wins, else the config file, else the
+  // built-in default. `?? DEFAULTS` also lets a null config value fall through.
+  const pick = <K extends keyof typeof DEFAULTS & keyof FileConfig>(
     key: K,
     shortFlag?: string,
-  ): NonNullable<FileConfig[K]> => {
-    if (flagWasProvided(key, shortFlag) || fileConfig[key] === undefined) {
-      return cli.flags[key] as NonNullable<FileConfig[K]>;
-    }
-    return fileConfig[key] as NonNullable<FileConfig[K]>;
+  ): (typeof DEFAULTS)[K] => {
+    if (flagWasProvided(key, shortFlag)) return cli.flags[key] as (typeof DEFAULTS)[K];
+    return (fileConfig[key] ?? DEFAULTS[key]) as (typeof DEFAULTS)[K];
   };
 
-  const docs = resolve('docs', 'd');
-  const include = resolve('include', 'i');
-  const strict = resolve('strict', 's');
-  const useCache = resolve('cache');
-  const cacheFile = resolve('cacheFile');
-  const coverageOut = resolve('coverageOut');
-  const coverageFormat = resolve('coverageFormat');
-  const slackWebhook = resolve('slackWebhook');
-  const discordWebhook = resolve('discordWebhook');
-  const fixDocs = resolve('fixDocs');
-  const checkDescriptions = resolve('checkDescriptions');
-  const updateReadme = resolve('updateReadme');
-  const readmePath = resolve('readmePath');
+  const docs = pick('docs', 'd');
+  const include = flagWasProvided('include', 'i')
+    ? (cli.flags.include ?? [])
+    : (fileConfig.include ?? []);
+  const strict = pick('strict', 's');
+  const useCache = pick('cache');
+  const cacheFile = pick('cacheFile');
+  const coverageOut = pick('coverageOut');
+  const coverageFormat = pick('coverageFormat');
+  const slackWebhook = pick('slackWebhook');
+  const discordWebhook = pick('discordWebhook');
+  const fixDocs = pick('fixDocs');
+  const checkDescriptions = pick('checkDescriptions');
+  const updateReadme = pick('updateReadme');
+  const readmePath = pick('readmePath');
 
   const docPatterns =
     include && include.length > 0

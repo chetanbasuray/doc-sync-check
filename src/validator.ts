@@ -117,7 +117,7 @@ export async function checkDrift(
   }
 
   const unusedDocBlocks = [...allDocSignatureBlocks].filter(
-    (block) => /\w+\s*\(/.test(block) && !knownSignatureBlocks.has(block),
+    (block) => /\w+\s*\(/.test(block) && !knownSignatureBlocks.has(stripDeprecatedMarker(block)),
   );
 
   if (unusedDocBlocks.length > 0) {

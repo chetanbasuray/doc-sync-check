@@ -30,6 +30,18 @@ describe('loadFileConfig', () => {
     expect(result).toEqual({ strict: true, include: ['docs/**/*.md'] });
   });
 
+  it('drops fields whose type does not match the schema', async () => {
+    const configPath = path.join(tempDir, 'rc.json');
+    await fs.writeFile(
+      configPath,
+      JSON.stringify({ docs: 123, strict: 'yes', include: ['ok.md', 5], readmePath: './R.md' }),
+    );
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = await loadFileConfig(configPath);
+    expect(result).toEqual({ readmePath: './R.md' });
+    warn.mockRestore();
+  });
+
   it('ignores a malformed config file instead of throwing', async () => {
     const configPath = path.join(tempDir, 'bad.json');
     await fs.writeFile(configPath, '{ not valid json ');
