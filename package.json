@@ -65,7 +65,8 @@
     "@swc/core": "^1.15.32",
     "fs-extra": "^11.3.6",
     "globby": "^16.2.0",
-    "meow": "^14.1.0"
+    "meow": "^14.1.0",
+    "shorol": "^2.1.8"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.1",

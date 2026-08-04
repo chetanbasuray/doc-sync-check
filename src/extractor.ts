@@ -1,5 +1,6 @@
 import { parseSync } from '@swc/core';
-import { escapeRegExp, normalizeSpace } from './utils.js';
+import { regex } from 'shorol';
+import { normalizeSpace } from './utils.js';
 
 type Span = { start: number; end: number };
 type AstNode = { type?: string; span?: Span; [key: string]: unknown };
@@ -331,9 +332,26 @@ export function extractSignatures(code: string, options: ExtractOptions = {}): F
     const params = (declaration.params as AstNode[] | undefined) ?? [];
     const parameterTexts = params.map((param) => getParamText(param, code));
     const explicitReturn = sliceSpan((declaration.returnType as AstNode | undefined)?.span, code);
-    const deprecated =
-      hasDeprecatedTag(declaration.span, code) ||
-      new RegExp(`/\\*\\*[\\s\\S]{0,500}@deprecated[\\s\\S]{0,500}\\*/\\s*export\\s+function\\s+${escapeRegExp(fnName)}\\b`, 'i').test(code);
+    const deprecatedBeforeFn = regex()
+      .literal('/**')
+      .any()
+      .repeat(0, 500)
+      .literal('@deprecated')
+      .any()
+      .repeat(0, 500)
+      .literal('*/')
+      .whitespace()
+      .zeroOrMore()
+      .literal('export')
+      .whitespace()
+      .oneOrMore()
+      .literal('function')
+      .whitespace()
+      .oneOrMore()
+      .literal(fnName)
+      .wordBoundary()
+      .toRegExp('is');
+    const deprecated = hasDeprecatedTag(declaration.span, code) || deprecatedBeforeFn.test(code);
     addSignature(`${prefix}${fnName}`, parameterTexts, explicitReturn, deprecated, '', '', declaration);
   };
 
