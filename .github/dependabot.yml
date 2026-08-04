@@ -16,6 +16,10 @@ updates:
       npm-security-updates:
         applies-to: security-updates
         patterns: ["*"]
+    ignore:
+      # ts-jest and typescript-eslint peer-require typescript < 7.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "chore(deps)"
   - package-ecosystem: "github-actions"
