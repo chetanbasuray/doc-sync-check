@@ -1,8 +1,11 @@
 import { globby } from 'globby';
 import fs from 'fs-extra';
 import path from 'path';
+import { regex } from 'shorol';
 import type { FunctionSignature } from './extractor.js';
-import { escapeRegExp, normalizeSpace, stripDeprecatedMarker } from './utils.js';
+import { normalizeSpace, stripDeprecatedMarker } from './utils.js';
+
+const functionLikeBlock = regex().word().oneOrMore().whitespace().zeroOrMore().literal('(').toRegExp();
 
 const signatureLiterals = (content: string): string[] => {
   const matches = content.match(/`([^`]+)`/g) ?? [];
@@ -76,7 +79,7 @@ export async function checkDrift(
 
   for (const sig of signatures) {
     const normalizedSig = stripDeprecatedMarker(normalizeSpace(sig.fullSignature));
-    const nameRegex = new RegExp(`\\b${escapeRegExp(sig.name)}\\b`);
+    const nameRegex = regex().wordBoundary().literal(sig.name).wordBoundary().toRegExp();
     let nameFound = false;
     let signatureFound = false;
 
@@ -117,7 +120,7 @@ export async function checkDrift(
   }
 
   const unusedDocBlocks = [...allDocSignatureBlocks].filter(
-    (block) => /\w+\s*\(/.test(block) && !knownSignatureBlocks.has(stripDeprecatedMarker(block)),
+    (block) => functionLikeBlock.test(block) && !knownSignatureBlocks.has(stripDeprecatedMarker(block)),
   );
 
   if (unusedDocBlocks.length > 0) {
