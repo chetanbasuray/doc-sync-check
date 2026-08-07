@@ -14,6 +14,7 @@ export interface FileConfig {
   checkDescriptions?: boolean;
   updateReadme?: boolean;
   readmePath?: string;
+  annotate?: boolean;
 }
 
 export const DEFAULT_CONFIG_PATH = '.doc-sync-checkrc.json';
@@ -28,7 +29,7 @@ const STRING_KEYS = [
   'readmePath',
 ] as const;
 
-const BOOLEAN_KEYS = ['strict', 'cache', 'fixDocs', 'checkDescriptions', 'updateReadme'] as const;
+const BOOLEAN_KEYS = ['strict', 'cache', 'fixDocs', 'checkDescriptions', 'updateReadme', 'annotate'] as const;
 
 // Keep only known fields whose type matches, so a wrong-typed value falls back
 // to the default instead of crashing later (e.g. a non-string reaching path.join).

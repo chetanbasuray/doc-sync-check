@@ -14,6 +14,7 @@ import { contentHash, DEFAULT_CACHE_PATH, loadCache, saveCache } from './cache.j
 import { notifyDriftFailure } from './integrations.js';
 import { updateReadmeFunctions } from './readme.js';
 import { DEFAULT_CONFIG_PATH, loadFileConfig, type FileConfig } from './config.js';
+import { emitGithubAnnotations, isGithubActions, writeStepSummary } from './reporters.js';
 
 const cli = meow(
   `
@@ -35,6 +36,7 @@ const cli = meow(
 	  --update-readme       Auto-write exported signatures to README markers
 	  --readme-path         README path for --update-readme (default: ./README.md)
 	  --config              Config file path (default: .doc-sync-checkrc.json)
+	  --annotate            Emit GitHub Actions annotations (default: auto in CI)
 	  --init                Write a starter .doc-sync-checkrc.json
 
 	Examples
@@ -59,6 +61,7 @@ const cli = meow(
       checkDescriptions: { type: 'boolean' },
       updateReadme: { type: 'boolean' },
       readmePath: { type: 'string' },
+      annotate: { type: 'boolean' },
       config: { type: 'string', default: DEFAULT_CONFIG_PATH },
       init: { type: 'boolean', default: false },
     },
@@ -173,6 +176,9 @@ async function run() {
   const checkDescriptions = pick('checkDescriptions');
   const updateReadme = pick('updateReadme');
   const readmePath = pick('readmePath');
+  const annotate = flagWasProvided('annotate')
+    ? Boolean(cli.flags.annotate)
+    : (fileConfig.annotate ?? isGithubActions());
 
   const docPatterns =
     include && include.length > 0
@@ -222,6 +228,11 @@ async function run() {
   const result = await checkDrift(allSigs, docPatterns, { checkDescriptions });
 
   console.log(`\n📈 Coverage: ${result.coveragePercent}% documented (${result.documentedSymbols}/${allSigs.length})`);
+
+  if (annotate) {
+    emitGithubAnnotations(result.findings);
+    await writeStepSummary(result);
+  }
 
   if (coverageOut) {
     if (coverageFormat === 'sonar') await writeSonarReport(result, coverageOut);

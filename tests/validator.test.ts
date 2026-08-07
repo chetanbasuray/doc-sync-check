@@ -145,3 +145,67 @@ describe('Validator (1.3.0 scope)', () => {
     expect(result.unusedDocBlocks).toEqual([]);
   });
 });
+
+describe('Validator findings (annotations + hints)', () => {
+  const tempDocsDir = path.join(__dirname, 'temp_findings');
+
+  beforeEach(async () => {
+    await fs.ensureDir(tempDocsDir);
+  });
+
+  afterEach(async () => {
+    await fs.remove(tempDocsDir);
+  });
+
+  it('reports a drift finding with file, line, and the expected signature', async () => {
+    const sigs: FunctionSignature[] = [
+      {
+        name: 'compute',
+        parameters: ['v: number'],
+        returnType: ': number',
+        fullSignature: 'compute(v: number): number',
+      },
+    ];
+    await fs.writeFile(
+      path.join(tempDocsDir, 'docs.md'),
+      '# API\n\nSome intro.\n\n`compute(v: string): number`\n',
+    );
+    const result = await checkDrift(sigs, path.join(tempDocsDir, '**/*.md'));
+
+    const drift = result.findings.find((f) => f.kind === 'drift');
+    expect(drift).toBeDefined();
+    expect(drift?.severity).toBe('error');
+    expect(drift?.symbol).toBe('compute');
+    expect(drift?.expected).toBe('compute(v: number): number');
+    expect(drift?.file).toContain('docs.md');
+    expect(drift?.line).toBe(5);
+  });
+
+  it('reports undocumented symbols as warnings without a location', async () => {
+    const sigs: FunctionSignature[] = [
+      { name: 'hidden', parameters: [], returnType: ': void', fullSignature: 'hidden(): void' },
+    ];
+    await fs.writeFile(path.join(tempDocsDir, 'docs.md'), '# API\n\nNothing relevant here.\n');
+    const result = await checkDrift(sigs, path.join(tempDocsDir, '**/*.md'));
+
+    const undocumented = result.findings.find((f) => f.kind === 'undocumented');
+    expect(undocumented?.severity).toBe('warning');
+    expect(undocumented?.file).toBeUndefined();
+  });
+
+  it('reports an unused doc block with its origin file and line', async () => {
+    const sigs: FunctionSignature[] = [
+      { name: 'activeFn', parameters: [], returnType: ': void', fullSignature: 'activeFn(): void' },
+    ];
+    await fs.writeFile(
+      path.join(tempDocsDir, 'docs.md'),
+      '`activeFn(): void`\n\n`removedFn(x: string): boolean`\n',
+    );
+    const result = await checkDrift(sigs, path.join(tempDocsDir, '**/*.md'));
+
+    const unused = result.findings.find((f) => f.kind === 'unused-doc-block');
+    expect(unused?.severity).toBe('error');
+    expect(unused?.file).toContain('docs.md');
+    expect(unused?.line).toBe(3);
+  });
+});
