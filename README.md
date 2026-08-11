@@ -34,6 +34,7 @@ npx doc-sync-check <source-dir> --docs <docs-dir>
 - `--check-descriptions`: Compares JSDoc descriptions against markdown text.
 - `--update-readme`: Updates function list between README markers.
 - `--config`: Path to the config file (default: `.doc-sync-checkrc.json`).
+- `--annotate`: Emits GitHub Actions annotations and a job summary. Auto-enabled when running under GitHub Actions; use `--no-annotate` to turn it off.
 - `--init`: Writes a starter `.doc-sync-checkrc.json`.
 - `--slack-webhook` and `--discord-webhook`: Sends drift failure notifications.
 
@@ -80,6 +81,31 @@ npx doc-sync-check src --include "docs/**/*.md" "README.md" --strict
 - Coverage can be exported in Sonar/Cobertura-friendly formats.
 - Drift failures can notify Slack/Discord webhooks.
 - VSCode extension scaffold is available under `.vscode-extension/`.
+
+### GitHub Actions
+
+Under GitHub Actions, drift, undocumented, and unused-block findings are emitted
+as annotations that appear inline on the pull request diff, and a summary table
+is written to the job summary. Annotations are on automatically when
+`GITHUB_ACTIONS` is set; pass `--annotate`/`--no-annotate` to force it either way.
+
+```yaml
+name: docs
+on: [pull_request]
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx doc-sync-check src --include "docs/**/*.md" "README.md" --strict
+```
+
+When a documented signature is stale, the output also prints the exact
+up-to-date signature to paste into the docs.
 
 ## Website
 
