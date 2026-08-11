@@ -193,6 +193,18 @@ describe('Validator findings (annotations + hints)', () => {
     expect(undocumented?.file).toBeUndefined();
   });
 
+  it('reports every symbol as undocumented when no markdown files match', async () => {
+    const sigs: FunctionSignature[] = [
+      { name: 'alpha', parameters: [], returnType: ': void', fullSignature: 'alpha(): void' },
+      { name: 'beta', parameters: [], returnType: ': void', fullSignature: 'beta(): void' },
+    ];
+    const result = await checkDrift(sigs, path.join(tempDocsDir, 'nope', '**/*.md'));
+
+    expect(result.undocumentedSymbols).toBe(2);
+    expect(result.findings).toHaveLength(2);
+    expect(result.findings.every((f) => f.kind === 'undocumented' && f.severity === 'warning')).toBe(true);
+  });
+
   it('reports an unused doc block with its origin file and line', async () => {
     const sigs: FunctionSignature[] = [
       { name: 'activeFn', parameters: [], returnType: ': void', fullSignature: 'activeFn(): void' },

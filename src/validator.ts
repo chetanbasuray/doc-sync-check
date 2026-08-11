@@ -62,7 +62,12 @@ export async function checkDrift(
       unusedDocBlocks: [],
       coveragePercent: signatures.length === 0 ? 100 : 0,
       descriptionDriftSymbols: [],
-      findings: [],
+      findings: signatures.map((sig) => ({
+        kind: 'undocumented',
+        severity: 'warning',
+        symbol: sig.name,
+        message: `'${sig.name}' was not found in any documentation.`,
+      })),
     };
   }
 
