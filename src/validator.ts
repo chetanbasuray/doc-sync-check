@@ -240,8 +240,8 @@ export async function writeCoverageBadge(result: DriftResult, outputPath: string
   const color = result.coveragePercent >= 90 ? 'brightgreen' : result.coveragePercent >= 70 ? 'yellow' : 'red';
   const badgeUrl = `https://img.shields.io/badge/doc_coverage-${result.coveragePercent}%25-${color}`;
   const payload: CoverageReport = {
-    schemaVersion: REPORT_SCHEMA_VERSION,
     ...result,
+    schemaVersion: REPORT_SCHEMA_VERSION,
     badgeUrl,
     generatedAt: new Date().toISOString(),
   };
