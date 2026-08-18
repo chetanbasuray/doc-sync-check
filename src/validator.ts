@@ -45,6 +45,31 @@ export interface CheckDriftOptions {
   checkDescriptions?: boolean;
 }
 
+// Bumped whenever the shape of a written JSON report changes, so consumers can
+// detect the format they are reading. See the JSON report schema in the README.
+export const REPORT_SCHEMA_VERSION = 1;
+
+export interface CoverageReport extends DriftResult {
+  schemaVersion: number;
+  badgeUrl: string;
+  generatedAt: string;
+}
+
+export interface SonarReport {
+  schemaVersion: number;
+  project: string;
+  metrics: {
+    documentedSymbols: number;
+    inSyncSymbols: number;
+    driftedSymbols: number;
+    undocumentedSymbols: number;
+    coveragePercent: number;
+    unusedDocBlocks: number;
+    descriptionDriftSymbols: number;
+  };
+  generatedAt: string;
+}
+
 export async function checkDrift(
   signatures: FunctionSignature[],
   docPatterns: string | string[],
@@ -214,7 +239,8 @@ export async function checkDrift(
 export async function writeCoverageBadge(result: DriftResult, outputPath: string): Promise<void> {
   const color = result.coveragePercent >= 90 ? 'brightgreen' : result.coveragePercent >= 70 ? 'yellow' : 'red';
   const badgeUrl = `https://img.shields.io/badge/doc_coverage-${result.coveragePercent}%25-${color}`;
-  const payload = {
+  const payload: CoverageReport = {
+    schemaVersion: REPORT_SCHEMA_VERSION,
     ...result,
     badgeUrl,
     generatedAt: new Date().toISOString(),
@@ -226,7 +252,8 @@ export async function writeCoverageBadge(result: DriftResult, outputPath: string
 }
 
 export async function writeSonarReport(result: DriftResult, outputPath: string): Promise<void> {
-  const payload = {
+  const payload: SonarReport = {
+    schemaVersion: REPORT_SCHEMA_VERSION,
     project: 'doc-sync-check',
     metrics: {
       documentedSymbols: result.documentedSymbols,

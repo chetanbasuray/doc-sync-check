@@ -1,7 +1,13 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { checkDrift } from '../src/validator.js';
+import {
+  checkDrift,
+  writeCoverageBadge,
+  writeSonarReport,
+  REPORT_SCHEMA_VERSION,
+} from '../src/validator.js';
+import type { DriftResult } from '../src/validator.js';
 import type { FunctionSignature } from '../src/extractor.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -219,5 +225,51 @@ describe('Validator findings (annotations + hints)', () => {
     expect(unused?.severity).toBe('error');
     expect(unused?.file).toContain('docs.md');
     expect(unused?.line).toBe(3);
+  });
+});
+
+describe('JSON report schema', () => {
+  const tempDir = path.join(__dirname, 'temp_reports');
+
+  const sampleResult = (): DriftResult => ({
+    hasDrift: true,
+    documentedSymbols: 2,
+    inSyncSymbols: 1,
+    driftedSymbols: 1,
+    undocumentedSymbols: 0,
+    unusedDocBlocks: [],
+    coveragePercent: 50,
+    descriptionDriftSymbols: [],
+    findings: [
+      { kind: 'drift', severity: 'error', symbol: 'compute', file: 'docs/api.md', line: 5, expected: 'compute(v: number): number', message: 'stale' },
+    ],
+  });
+
+  beforeEach(async () => {
+    await fs.ensureDir(tempDir);
+  });
+
+  afterEach(async () => {
+    await fs.remove(tempDir);
+  });
+
+  it('stamps schemaVersion and carries findings in the coverage report', async () => {
+    const out = path.join(tempDir, 'coverage.json');
+    await writeCoverageBadge(sampleResult(), out);
+    const report = JSON.parse(await fs.readFile(out, 'utf-8'));
+
+    expect(report.schemaVersion).toBe(REPORT_SCHEMA_VERSION);
+    expect(report.coveragePercent).toBe(50);
+    expect(report.findings[0]).toMatchObject({ kind: 'drift', file: 'docs/api.md', line: 5 });
+    expect(typeof report.badgeUrl).toBe('string');
+  });
+
+  it('stamps schemaVersion in the sonar report', async () => {
+    const out = path.join(tempDir, 'sonar.json');
+    await writeSonarReport(sampleResult(), out);
+    const report = JSON.parse(await fs.readFile(out, 'utf-8'));
+
+    expect(report.schemaVersion).toBe(REPORT_SCHEMA_VERSION);
+    expect(report.metrics.coveragePercent).toBe(50);
   });
 });

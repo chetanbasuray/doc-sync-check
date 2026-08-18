@@ -107,6 +107,41 @@ jobs:
 When a documented signature is stale, the output also prints the exact
 up-to-date signature to paste into the docs.
 
+## JSON report schema
+
+The default `--coverage-format json` output carries a `schemaVersion` so
+consumers can detect the format. The current version is `1`:
+
+```json
+{
+  "schemaVersion": 1,
+  "hasDrift": true,
+  "documentedSymbols": 8,
+  "inSyncSymbols": 7,
+  "driftedSymbols": 1,
+  "undocumentedSymbols": 2,
+  "unusedDocBlocks": ["removedFn(x: string): boolean"],
+  "coveragePercent": 80,
+  "descriptionDriftSymbols": [],
+  "findings": [
+    {
+      "kind": "drift",
+      "severity": "error",
+      "symbol": "createUser",
+      "file": "docs/api.md",
+      "line": 14,
+      "expected": "createUser(input: CreateUserInput): Promise<User>",
+      "message": "'createUser' is mentioned in documentation, but its up-to-date signature was not found."
+    }
+  ]
+}
+```
+
+`findings[]` entries have `kind` (`drift`, `undocumented`, `unused-doc-block`,
+`description-drift`), `severity` (`error` or `warning`), and, where known,
+`symbol`, `file`, `line`, and `expected`. The `sonar` format carries the same
+`schemaVersion`. `schemaVersion` is bumped only when the shape changes.
+
 ## Website
 
 A simple project website scaffold is available in `website/` for GitHub Pages.
