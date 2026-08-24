@@ -181,11 +181,13 @@ async function run() {
   const annotate = flagWasProvided('annotate')
     ? Boolean(cli.flags.annotate)
     : (fileConfig.annotate ?? isGithubActions());
-  // Reject out-of-range values (including an empty --min-coverage= that meow
-  // coerces to 0) so a bad value fails loudly instead of disabling the check.
-  const minCoverageInput = flagWasProvided('minCoverage') ? cli.flags.minCoverage : fileConfig.minCoverage;
+  // Validate whenever min-coverage is supplied, so a bad value (a bare flag, an
+  // empty --min-coverage= that meow coerces to 0, or an out-of-range number)
+  // fails loudly instead of silently disabling the check.
+  const minCoverageProvided = flagWasProvided('minCoverage');
+  const minCoverageInput = minCoverageProvided ? cli.flags.minCoverage : fileConfig.minCoverage;
   let minCoverage: number | undefined;
-  if (minCoverageInput !== undefined) {
+  if (minCoverageProvided || minCoverageInput !== undefined) {
     if (typeof minCoverageInput !== 'number' || !Number.isFinite(minCoverageInput) || minCoverageInput <= 0 || minCoverageInput > 100) {
       console.error(`Invalid min-coverage value: ${minCoverageInput}. Expected a number between 1 and 100.`);
       process.exit(1);
