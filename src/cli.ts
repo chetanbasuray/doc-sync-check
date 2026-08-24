@@ -181,12 +181,17 @@ async function run() {
   const annotate = flagWasProvided('annotate')
     ? Boolean(cli.flags.annotate)
     : (fileConfig.annotate ?? isGithubActions());
-  const minCoverageRaw = flagWasProvided('minCoverage') ? cli.flags.minCoverage : fileConfig.minCoverage;
-  if (minCoverageRaw !== undefined && !(typeof minCoverageRaw === 'number' && Number.isFinite(minCoverageRaw))) {
-    console.error(`Invalid --min-coverage value: ${minCoverageRaw}. Expected a finite number.`);
-    process.exit(1);
+  let minCoverage: number | undefined;
+  if (flagWasProvided('minCoverage')) {
+    const value = cli.flags.minCoverage;
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      console.error(`Invalid --min-coverage value: ${value}. Expected a finite number.`);
+      process.exit(1);
+    }
+    minCoverage = value;
+  } else {
+    minCoverage = fileConfig.minCoverage;
   }
-  const minCoverage = minCoverageRaw as number | undefined;
 
   const docPatterns =
     include && include.length > 0
