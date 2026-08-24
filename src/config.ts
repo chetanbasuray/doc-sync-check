@@ -15,6 +15,7 @@ export interface FileConfig {
   updateReadme?: boolean;
   readmePath?: string;
   annotate?: boolean;
+  minCoverage?: number;
 }
 
 export const DEFAULT_CONFIG_PATH = '.doc-sync-checkrc.json';
@@ -30,6 +31,8 @@ const STRING_KEYS = [
 ] as const;
 
 const BOOLEAN_KEYS = ['strict', 'cache', 'fixDocs', 'checkDescriptions', 'updateReadme', 'annotate'] as const;
+
+const NUMBER_KEYS = ['minCoverage'] as const;
 
 // Keep only known fields whose type matches, so a wrong-typed value falls back
 // to the default instead of crashing later (e.g. a non-string reaching path.join).
@@ -47,6 +50,11 @@ function sanitize(raw: Record<string, unknown>, configPath: string): FileConfig 
     if (raw[key] === undefined) continue;
     if (typeof raw[key] === 'boolean') config[key] = raw[key] as boolean;
     else warn(key, 'boolean');
+  }
+  for (const key of NUMBER_KEYS) {
+    if (raw[key] === undefined) continue;
+    if (typeof raw[key] === 'number' && Number.isFinite(raw[key])) config[key] = raw[key] as number;
+    else warn(key, 'number');
   }
   if (raw.include !== undefined) {
     if (Array.isArray(raw.include) && raw.include.every((item) => typeof item === 'string')) {

@@ -36,6 +36,7 @@ const cli = meow(
 	  --update-readme       Auto-write exported signatures to README markers
 	  --readme-path         README path for --update-readme (default: ./README.md)
 	  --config              Config file path (default: .doc-sync-checkrc.json)
+	  --min-coverage        Fail if documented coverage is below this percent
 	  --annotate            Emit GitHub Actions annotations (default: auto in CI)
 	  --init                Write a starter .doc-sync-checkrc.json
 
@@ -62,6 +63,7 @@ const cli = meow(
       updateReadme: { type: 'boolean' },
       readmePath: { type: 'string' },
       annotate: { type: 'boolean' },
+      minCoverage: { type: 'number' },
       config: { type: 'string', default: DEFAULT_CONFIG_PATH },
       init: { type: 'boolean', default: false },
     },
@@ -179,6 +181,19 @@ async function run() {
   const annotate = flagWasProvided('annotate')
     ? Boolean(cli.flags.annotate)
     : (fileConfig.annotate ?? isGithubActions());
+  // Validate whenever min-coverage is supplied, so a bad value (a bare flag, an
+  // empty --min-coverage= that meow coerces to 0, or an out-of-range number)
+  // fails loudly instead of silently disabling the check.
+  const minCoverageProvided = flagWasProvided('minCoverage');
+  const minCoverageInput = minCoverageProvided ? cli.flags.minCoverage : fileConfig.minCoverage;
+  let minCoverage: number | undefined;
+  if (minCoverageProvided || minCoverageInput !== undefined) {
+    if (typeof minCoverageInput !== 'number' || !Number.isFinite(minCoverageInput) || minCoverageInput < 1 || minCoverageInput > 100) {
+      console.error(`Invalid min-coverage value: ${minCoverageInput}. Expected a number between 1 and 100.`);
+      process.exit(1);
+    }
+    minCoverage = minCoverageInput;
+  }
 
   const docPatterns =
     include && include.length > 0
@@ -240,6 +255,13 @@ async function run() {
     else await writeCoverageBadge(result, coverageOut);
   }
 
+  let shouldFail = false;
+
+  if (minCoverage !== undefined && result.coveragePercent < minCoverage) {
+    console.error(`\n❌ Coverage ${result.coveragePercent}% is below the required minimum of ${minCoverage}%.`);
+    shouldFail = true;
+  }
+
   if (result.hasDrift) {
     await notifyDriftFailure({
       slackWebhook,
@@ -253,13 +275,15 @@ async function run() {
 
     if (strict) {
       console.error('\n❌ Drift check failed. Please update your documentation.');
-      process.exit(1);
+      shouldFail = true;
+    } else {
+      console.warn('\n⚠️  Drift detected, but strict mode is OFF.');
     }
-
-    console.warn('\n⚠️  Drift detected, but strict mode is OFF. Exiting with success.');
   } else {
     console.log('\n✅ Drift check complete. No issues found.');
   }
+
+  if (shouldFail) process.exit(1);
 }
 
 run().catch((error) => {

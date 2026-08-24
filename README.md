@@ -34,6 +34,7 @@ npx doc-sync-check <source-dir> --docs <docs-dir>
 - `--check-descriptions`: Compares JSDoc descriptions against markdown text.
 - `--update-readme`: Updates function list between README markers.
 - `--config`: Path to the config file (default: `.doc-sync-checkrc.json`).
+- `--min-coverage`: Exit with code 1 if documented coverage is below this percent (for example `--min-coverage 90`). Independent of `--strict`.
 - `--annotate`: Emits GitHub Actions annotations and a job summary. Auto-enabled when running under GitHub Actions; use `--no-annotate` to turn it off.
 - `--init`: Writes a starter `.doc-sync-checkrc.json`.
 - `--slack-webhook` and `--discord-webhook`: Sends drift failure notifications.
