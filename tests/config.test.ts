@@ -42,6 +42,18 @@ describe('loadFileConfig', () => {
     warn.mockRestore();
   });
 
+  it('keeps a numeric minCoverage and drops a non-numeric one', async () => {
+    const goodPath = path.join(tempDir, 'good.json');
+    await fs.writeFile(goodPath, JSON.stringify({ minCoverage: 90 }));
+    expect(await loadFileConfig(goodPath)).toEqual({ minCoverage: 90 });
+
+    const badPath = path.join(tempDir, 'bad-num.json');
+    await fs.writeFile(badPath, JSON.stringify({ minCoverage: '90' }));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(await loadFileConfig(badPath)).toEqual({});
+    warn.mockRestore();
+  });
+
   it('ignores a malformed config file instead of throwing', async () => {
     const configPath = path.join(tempDir, 'bad.json');
     await fs.writeFile(configPath, '{ not valid json ');
