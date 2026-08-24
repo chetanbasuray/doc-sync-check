@@ -188,7 +188,7 @@ async function run() {
   const minCoverageInput = minCoverageProvided ? cli.flags.minCoverage : fileConfig.minCoverage;
   let minCoverage: number | undefined;
   if (minCoverageProvided || minCoverageInput !== undefined) {
-    if (typeof minCoverageInput !== 'number' || !Number.isFinite(minCoverageInput) || minCoverageInput <= 0 || minCoverageInput > 100) {
+    if (typeof minCoverageInput !== 'number' || !Number.isFinite(minCoverageInput) || minCoverageInput < 1 || minCoverageInput > 100) {
       console.error(`Invalid min-coverage value: ${minCoverageInput}. Expected a number between 1 and 100.`);
       process.exit(1);
     }
